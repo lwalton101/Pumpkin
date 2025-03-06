@@ -47,7 +47,8 @@ impl WorldGenerator for VanillaGenerator {
         for x in 0..16u8 {
             for z in 0..16u8 {
                 // TODO: This can be chunk specific
-                for y in (surface_config.noise.min_y..surface_config.noise.height as i8).rev() {
+                let max_y = surface_config.noise.height as i16 - surface_config.noise.min_y.abs() as i16;
+                for y in (surface_config.noise.min_y..max_y as i8).rev() {
                     let coordinates = ChunkRelativeBlockCoordinates {
                         x: x.into(),
                         y: y.into(),
