@@ -20,7 +20,7 @@ use super::{
         },
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
-        multi_noise_sampler::{self, MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+        multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::GlobalProtoNoiseRouter,
     },
     ore_sampler::OreVeinSampler,

@@ -134,13 +134,13 @@ impl<'a> MultiNoiseSampler<'a> {
                     let max_value = component_stack[wrapper.input_index].max();
 
                     match wrapper.wrapper_type {
-                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(
+                        WrapperType::Cache2D => ChunkNoiseFunctionComponent::Chunk(Box::new(
                             ChunkSpecificNoiseFunctionComponent::Cache2D(Cache2D::new(
                                 wrapper.input_index,
                                 min_value,
                                 max_value,
                             )),
-                        ),
+                        )),
                         WrapperType::CacheFlat => {
                             let mut flat_cache = FlatCache::new(
                                 wrapper.input_index,
@@ -190,13 +190,27 @@ impl<'a> MultiNoiseSampler<'a> {
                                 }
                             }
 
-                            ChunkNoiseFunctionComponent::Chunk(
+                            ChunkNoiseFunctionComponent::Chunk(Box::new(
                                 ChunkSpecificNoiseFunctionComponent::FlatCache(flat_cache),
-                            )
+                            ))
                         }
-                        _ => ChunkNoiseFunctionComponent::Panic(
-                            "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code".to_string()
-                        ),
+                        // Java passes thru if the noise pos is not the chunk itself, which it is
+                        // never for the MultiNoiseSampler
+                        WrapperType::CacheOnce => {
+                            ChunkNoiseFunctionComponent::PassThrough(PassThrough {
+                                input_index: wrapper.input_index,
+                                min_value,
+                                max_value,
+                            })
+                        }
+                        WrapperType::CellCache => ChunkNoiseFunctionComponent::Panic(format!(
+                            "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code ({})",
+                            "CellCache"
+                        )),
+                        WrapperType::Interpolated => ChunkNoiseFunctionComponent::Panic(format!(
+                            "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code ({})",
+                            "Interpolated"
+                        )),
                     }
                 }
             };
