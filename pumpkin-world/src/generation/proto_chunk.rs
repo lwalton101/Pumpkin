@@ -14,8 +14,7 @@ use super::{
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     biome_coords,
     chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, STONE_BLOCK, WATER_BLOCK},
-    height_limit::HeightLimitView,
-    noise_router::{multi_noise_sampler, proto_noise_router::GlobalProtoNoiseRouter},
+    noise_router::proto_noise_router::GlobalProtoNoiseRouter,
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
 };

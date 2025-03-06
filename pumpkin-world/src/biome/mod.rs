@@ -1,23 +1,24 @@
-use std::{cell::RefCell, sync::LazyLock};
+use std::{cell::RefCell, collections::HashMap, sync::LazyLock};
 
 use enum_dispatch::enum_dispatch;
-use multi_noise::{BiomeEntries, SearchTree, TreeLeafNode};
+use multi_noise::{NoiseHypercube, SearchTree, TreeLeafNode};
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::vector3::Vector3;
 
 use crate::{
-    coordinates::BlockCoordinates, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
+    dimension::Dimension, generation::noise_router::multi_noise_sampler::MultiNoiseSampler,
 };
 pub mod multi_noise;
 
 pub static BIOME_ENTRIES: LazyLock<SearchTree<Biome>> = LazyLock::new(|| {
     SearchTree::create(
-        serde_json::from_str::<BiomeEntries>(include_str!("../../../assets/multi_noise.json"))
-            .expect("Could not parse multi_noise.json.")
-            .nodes
-            .into_iter()
-            .flat_map(|(_, biome_map)| biome_map.into_iter())
-            .collect(),
+        serde_json::from_str::<HashMap<Dimension, HashMap<Biome, NoiseHypercube>>>(include_str!(
+            "../../../assets/multi_noise.json"
+        ))
+        .expect("Could not parse multi_noise.json.")
+        .into_iter()
+        .flat_map(|(_, biome_map)| biome_map.into_iter())
+        .collect(),
     )
     .expect("entries cannot be empty")
 });
