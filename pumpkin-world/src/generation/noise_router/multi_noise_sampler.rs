@@ -196,21 +196,11 @@ impl<'a> MultiNoiseSampler<'a> {
                         }
                         // Java passes thru if the noise pos is not the chunk itself, which it is
                         // never for the MultiNoiseSampler
-                        WrapperType::CacheOnce => {
-                            ChunkNoiseFunctionComponent::PassThrough(PassThrough {
-                                input_index: wrapper.input_index,
-                                min_value,
-                                max_value,
-                            })
-                        }
-                        WrapperType::CellCache => ChunkNoiseFunctionComponent::Panic(format!(
-                            "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code ({})",
-                            "CellCache"
-                        )),
-                        WrapperType::Interpolated => ChunkNoiseFunctionComponent::Panic(format!(
-                            "These density functions should not be a part of the MultiNoiseSampler! We probably need to re-write code ({})",
-                            "Interpolated"
-                        )),
+                        _ => ChunkNoiseFunctionComponent::PassThrough(PassThrough {
+                            input_index: wrapper.input_index,
+                            min_value,
+                            max_value,
+                        }),
                     }
                 }
             };
