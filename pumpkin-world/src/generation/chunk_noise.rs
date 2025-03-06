@@ -12,7 +12,6 @@ use super::{
         WorldAquiferSampler,
     },
     biome_coords,
-    generation_shapes::GenerationShape,
     noise_router::{
         chunk_density_function::{
             ChunkNoiseFunctionBuilderOptions, ChunkNoiseFunctionSampleOptions, SampleAction,
@@ -25,6 +24,7 @@ use super::{
     },
     ore_sampler::OreVeinSampler,
     positions::chunk_pos,
+    settings::GenerationShapeConfig,
 };
 
 pub const STONE_BLOCK: BlockState = block_state!("stone");
@@ -202,8 +202,7 @@ impl IndexToNoisePos for ChunkIndexMapper {
 
 pub struct ChunkNoiseGenerator<'a> {
     pub state_sampler: BlockStateSampler,
-    pub multi_noise_sampler: MultiNoiseSampler<'a>,
-    generation_shape: GenerationShape,
+    generation_shape: &'a GenerationShapeConfig,
     start_cell_pos: Vector2<i32>,
 
     vertical_cell_count: usize,
@@ -224,7 +223,7 @@ impl<'a> ChunkNoiseGenerator<'a> {
         horizontal_cell_count: u8,
         start_block_x: i32,
         start_block_z: i32,
-        generation_shape: GenerationShape,
+        generation_shape: &'a GenerationShapeConfig,
         level_sampler: FluidLevelSampler,
         aquifers: bool,
         ore_veins: bool,
@@ -248,10 +247,10 @@ impl<'a> ChunkNoiseGenerator<'a> {
             horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
         );
 
-        let vertical_cell_count = generation_shape.height() as usize
+        let vertical_cell_count = generation_shape.height as usize
             / generation_shape.vertical_cell_block_count() as usize;
         let minimum_cell_y = floor_div(
-            generation_shape.min_y() as i32,
+            generation_shape.min_y as i32,
             generation_shape.vertical_cell_block_count() as i32,
         );
         let vertical_cell_block_count = generation_shape.vertical_cell_block_count();
@@ -273,8 +272,8 @@ impl<'a> ChunkNoiseGenerator<'a> {
             AquiferSampler::Aquifier(WorldAquiferSampler::new(
                 Vector2::new(section_x, section_z),
                 random_config.aquifier_random_deriver.clone(),
-                generation_shape.min_y(),
-                generation_shape.height(),
+                generation_shape.min_y,
+                generation_shape.height,
                 level_sampler,
             ))
         } else {
@@ -293,24 +292,16 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
         let height_estimator = ChunkNoiseHeightEstimator {
             surface_height_estimate: HashMap::new(),
-            minimum_height_y: generation_shape.min_y() as i32,
-            maximum_height_y: generation_shape.min_y() as i32 + generation_shape.height() as i32,
+            minimum_height_y: generation_shape.min_y as i32,
+            maximum_height_y: generation_shape.min_y as i32 + generation_shape.height as i32,
             vertical_cell_block_count: vertical_cell_block_count as usize,
         };
 
         let router = ChunkNoiseRouter::generate(noise_router_base, &builder_options);
-        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
-            biome_pos.x,
-            biome_pos.z,
-            horizontal_biome_end as usize,
-        );
-        let multi_noise_sampler =
-            MultiNoiseSampler::generate(noise_router_base, &multi_noise_config);
 
         Self {
             state_sampler,
             generation_shape,
-            multi_noise_sampler,
             start_cell_pos,
 
             vertical_cell_count,
@@ -484,15 +475,15 @@ impl<'a> ChunkNoiseGenerator<'a> {
 
     /// Aka bottom_y
     pub fn min_y(&self) -> i8 {
-        self.generation_shape.min_y()
+        self.generation_shape.min_y
     }
 
     pub fn minimum_cell_y(&self) -> i8 {
-        self.generation_shape.min_y() / self.generation_shape.vertical_cell_block_count() as i8
+        self.generation_shape.min_y / self.generation_shape.vertical_cell_block_count() as i8
     }
 
     pub fn height(&self) -> u16 {
-        self.generation_shape.height()
+        self.generation_shape.height
     }
 }
 

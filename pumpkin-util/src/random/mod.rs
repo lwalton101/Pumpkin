@@ -44,6 +44,13 @@ impl RandomGenerator {
         }
     }
 
+    pub fn split_pos(&mut self) -> Self {
+        match self {
+            Self::Xoroshiro(rand) => Self::Xoroshiro(rand.split()),
+            Self::Legacy(rand) => Self::Legacy(rand.split()),
+        }
+    }
+
     #[inline]
     pub fn next_splitter(&mut self) -> RandomDeriver {
         match self {

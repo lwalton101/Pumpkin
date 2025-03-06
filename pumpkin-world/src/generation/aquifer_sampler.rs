@@ -1,6 +1,6 @@
 use enum_dispatch::enum_dispatch;
 use pumpkin_util::{
-    math::{floor_div, vector2::Vector2, vector3::Vector3},
+    math::{clamped_map, floor_div, vector2::Vector2, vector3::Vector3},
     random::RandomDeriver,
 };
 
@@ -8,7 +8,6 @@ use crate::block::BlockState;
 
 use super::{
     chunk_noise::{ChunkNoiseHeightEstimator, LAVA_BLOCK, WATER_BLOCK},
-    noise::{clamped_map, map},
     noise_router::{
         chunk_density_function::ChunkNoiseFunctionSampleOptions,
         chunk_noise_router::ChunkNoiseRouter,
@@ -357,8 +356,8 @@ impl WorldAquiferSampler {
             let g = router
                 .fluid_level_floodedness_noise(&pos, sample_options)
                 .clamp(-1f64, 1f64);
-            let h = map(f, 1f64, 0f64, -0.3f64, 0.8f64);
-            let k = map(f, 1f64, 0f64, -0.8f64, 0.4f64);
+            let h = pumpkin_util::math::map(f, 1f64, 0f64, -0.3f64, 0.8f64);
+            let k = pumpkin_util::math::map(f, 1f64, 0f64, -0.8f64, 0.4f64);
 
             (g - k, g - h)
         };
@@ -658,7 +657,6 @@ mod test {
                 BlockStateSampler, ChainedBlockStateSampler, ChunkNoiseGenerator,
                 ChunkNoiseHeightEstimator, LAVA_BLOCK, WATER_BLOCK,
             },
-            generation_shapes::GenerationShape,
             noise_router::{
                 chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
                 chunk_noise_router::ChunkNoiseRouter,
@@ -667,6 +665,7 @@ mod test {
             },
             positions::chunk_pos,
             proto_chunk::StandardChunkFluidLevelSampler,
+            settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
         noise_router::NOISE_ROUTER_ASTS,
     };
@@ -689,7 +688,10 @@ mod test {
         ChunkNoiseHeightEstimator,
         ChunkNoiseFunctionSampleOptions,
     ) {
-        let shape = GenerationShape::SURFACE;
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let shape = &surface_config.noise;
         let chunk_pos = Vector2::new(7, 4);
         let sampler = FluidLevelSampler::Chunk(StandardChunkFluidLevelSampler::new(
             FluidLevel::new(63, WATER_BLOCK),

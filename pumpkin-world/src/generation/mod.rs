@@ -3,7 +3,6 @@
 pub mod aquifer_sampler;
 mod blender;
 pub mod chunk_noise;
-pub mod generation_shapes;
 mod generator;
 mod generic_generator;
 pub mod height_limit;
@@ -14,13 +13,12 @@ pub mod ore_sampler;
 mod positions;
 pub mod proto_chunk;
 mod seed;
+pub mod settings;
+mod surface;
 
 use derive_getters::Getters;
 pub use generator::WorldGenerator;
-use implementation::{
-    //overworld::biome::plains::PlainsGenerator,
-    test::TestGenerator,
-};
+use implementation::VanillaGenerator;
 use pumpkin_util::random::{RandomDeriver, RandomImpl, xoroshiro128::Xoroshiro};
 pub use seed::Seed;
 
@@ -28,8 +26,7 @@ use generator::GeneratorInit;
 
 pub fn get_world_gen(seed: Seed) -> Box<dyn WorldGenerator> {
     // TODO decide which WorldGenerator to pick based on config.
-    //Box::new(PlainsGenerator::new(seed))
-    Box::new(TestGenerator::new(seed))
+    Box::new(VanillaGenerator::new(seed))
 }
 
 #[derive(Getters)]

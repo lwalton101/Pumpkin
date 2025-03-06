@@ -1,3 +1,70 @@
-pub mod overworld;
 pub mod superflat;
-pub mod test;
+
+use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
+
+use crate::{
+    chunk::{ChunkData, Subchunks},
+    coordinates::ChunkRelativeBlockCoordinates,
+    generation::{
+        GlobalRandomConfig, Seed, WorldGenerator, generator::GeneratorInit,
+        noise_router::proto_noise_router::GlobalProtoNoiseRouter, proto_chunk::ProtoChunk,
+    },
+    noise_router::NOISE_ROUTER_ASTS,
+};
+
+use super::settings::{GENERATION_SETTINGS, GeneratorSetting};
+
+pub struct VanillaGenerator {
+    random_config: GlobalRandomConfig,
+    base_router: GlobalProtoNoiseRouter,
+}
+
+impl GeneratorInit for VanillaGenerator {
+    fn new(seed: Seed) -> Self {
+        let random_config = GlobalRandomConfig::new(seed.0);
+        let base_router =
+            GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
+        Self {
+            random_config,
+            base_router,
+        }
+    }
+}
+
+impl WorldGenerator for VanillaGenerator {
+    fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
+        let mut subchunks = Subchunks::Single(0);
+        // TODO: This is bad, but it works
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut proto_chunk =
+            ProtoChunk::new(at, &self.base_router, &self.random_config, surface_config);
+        proto_chunk.populate_biomes();
+        proto_chunk.populate_noise();
+
+        for x in 0..16u8 {
+            for z in 0..16u8 {
+                // TODO: This can be chunk specific
+                for y in (surface_config.noise.min_y..surface_config.noise.height as i8).rev() {
+                    let coordinates = ChunkRelativeBlockCoordinates {
+                        x: x.into(),
+                        y: y.into(),
+                        z: z.into(),
+                    };
+
+                    let block =
+                        proto_chunk.get_block_state(&Vector3::new(x.into(), y.into(), z.into()));
+
+                    subchunks.set_block(coordinates, block.state_id);
+                }
+            }
+        }
+
+        ChunkData {
+            subchunks,
+            heightmap: Default::default(),
+            position: at,
+        }
+    }
+}

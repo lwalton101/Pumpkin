@@ -15,7 +15,6 @@ use std::{
 use thiserror::Error;
 
 use crate::{
-    WORLD_HEIGHT,
     block::BlockState,
     coordinates::{ChunkRelativeBlockCoordinates, Height},
     level::LevelFolder,
@@ -24,6 +23,7 @@ use crate::{
 pub mod anvil;
 pub mod linear;
 
+const WORLD_HEIGHT: usize = 384;
 pub const CHUNK_AREA: usize = 16 * 16;
 pub const SUBCHUNK_VOLUME: usize = CHUNK_AREA * 16;
 pub const SUBCHUNKS_COUNT: usize = WORLD_HEIGHT / 16;

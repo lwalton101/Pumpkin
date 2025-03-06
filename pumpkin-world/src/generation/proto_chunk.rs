@@ -4,9 +4,7 @@ use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 use crate::{
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
     block::BlockState,
-    generation::{
-        chunk_noise::CHUNK_DIM, generation_shapes::GenerationShape, positions::chunk_pos,
-    },
+    generation::{chunk_noise::CHUNK_DIM, positions::chunk_pos},
 };
 
 use super::{
@@ -14,9 +12,13 @@ use super::{
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     biome_coords,
     chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, STONE_BLOCK, WATER_BLOCK},
-    noise_router::proto_noise_router::GlobalProtoNoiseRouter,
+    noise_router::{
+        multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
+        proto_noise_router::GlobalProtoNoiseRouter,
+    },
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
+    settings::GenerationSettings,
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -77,6 +79,8 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 pub struct ProtoChunk<'a> {
     chunk_pos: Vector2<i32>,
     pub sampler: ChunkNoiseGenerator<'a>,
+    pub multi_noise_sampler: MultiNoiseSampler<'a>,
+    settings: &'a GenerationSettings,
     // These are local positions
     flat_block_map: Vec<BlockState>,
     flat_biome_map: Vec<Biome>,
@@ -88,8 +92,9 @@ impl<'a> ProtoChunk<'a> {
         chunk_pos: Vector2<i32>,
         base_router: &'a GlobalProtoNoiseRouter,
         random_config: &'a GlobalRandomConfig,
+        settings: &'a GenerationSettings,
     ) -> Self {
-        let generation_shape = GenerationShape::SURFACE;
+        let generation_shape = &settings.noise;
 
         let horizontal_cell_count = CHUNK_DIM / generation_shape.horizontal_cell_block_count();
 
@@ -99,22 +104,41 @@ impl<'a> ProtoChunk<'a> {
             FluidLevel::new(-54, LAVA_BLOCK),
         ));
 
-        let height = generation_shape.height();
+        let height = generation_shape.height;
+        let start_x = chunk_pos::start_block_x(&chunk_pos);
+        let start_z = chunk_pos::start_block_z(&chunk_pos);
+
         let sampler = ChunkNoiseGenerator::new(
             base_router,
             random_config,
             horizontal_cell_count,
-            chunk_pos::start_block_x(&chunk_pos),
-            chunk_pos::start_block_z(&chunk_pos),
-            generation_shape,
+            start_x,
+            start_z,
+            &generation_shape,
             sampler,
             true,
             true,
         );
+        // TODO: This is duplicate code already in ChunkNoiseGenerator::new
+        let biome_pos = Vector2::new(
+            biome_coords::from_block(start_x),
+            biome_coords::from_block(start_z),
+        );
+        let horizontal_biome_end = biome_coords::from_block(
+            horizontal_cell_count * generation_shape.horizontal_cell_block_count(),
+        );
+        let multi_noise_config = MultiNoiseSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.z,
+            horizontal_biome_end as usize,
+        );
+        let multi_noise_sampler = MultiNoiseSampler::generate(base_router, &multi_noise_config);
 
         Self {
             chunk_pos,
+            settings,
             sampler,
+            multi_noise_sampler,
             flat_block_map: vec![
                 BlockState::AIR;
                 CHUNK_DIM as usize * CHUNK_DIM as usize * height as usize
@@ -154,6 +178,17 @@ impl<'a> ProtoChunk<'a> {
     }
 
     #[inline]
+    pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: BlockState) {
+        let local_pos = Vector3::new(
+            local_pos.x & 15,
+            local_pos.y - self.sampler.min_y() as i32,
+            local_pos.z & 15,
+        );
+        let index = self.local_pos_to_index(&local_pos);
+        self.flat_block_map[index] = block_state;
+    }
+
+    #[inline]
     pub fn get_biome(&self, local_pos: &Vector3<i32>) -> Biome {
         let local_pos = Vector3::new(
             local_pos.x & 15,
@@ -183,7 +218,7 @@ impl<'a> ProtoChunk<'a> {
                     for z in 0..4 {
                         let biome = MultiNoiseBiomeSupplier::biome(
                             Vector3::new(start_x + x, start_y + y, start_z + z),
-                            &mut self.sampler.multi_noise_sampler,
+                            &mut self.multi_noise_sampler,
                         );
                         let local_pos = Vector3 {
                             x: x & 15,
@@ -297,6 +332,25 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
+    pub fn build_surface(&self) {
+        let start_x = self.chunk_pos.x;
+        let start_z = self.chunk_pos.z;
+
+        for x in 0..16 {
+            for z in 0..16 {
+                let x = start_x + x;
+                let z = start_z + z;
+                let top = self.sampler.height(); // TODO: use heightmaps
+                for y in top..self.sampler.min_y() as u16 {
+                    let state = self.get_block_state(&Vector3::new(x, y as i32, z));
+                    if state.is_air() {
+                        continue;
+                    }
+                }
+            }
+        }
+    }
+
     fn start_cell_x(&self) -> i32 {
         self.start_block_x() / self.sampler.horizontal_cell_block_count() as i32
     }
@@ -327,6 +381,7 @@ mod test {
                 density_function::{NoiseFunctionComponentRange, PassThrough},
                 proto_noise_router::{GlobalProtoNoiseRouter, ProtoNoiseFunctionComponent},
             },
+            settings::{GENERATION_SETTINGS, GeneratorSetting},
         },
         noise_router::{NOISE_ROUTER_ASTS, density_function_ast::WrapperType},
         read_data_from_file,
@@ -365,8 +420,15 @@ mod test {
                     }
                 }
             });
-
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &base_router,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         expected_data
@@ -406,8 +468,15 @@ mod test {
                     }
                 }
             });
-
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &base_router,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         expected_data
@@ -447,8 +516,15 @@ mod test {
                     }
                 }
             });
-
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &base_router,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         expected_data
@@ -488,8 +564,15 @@ mod test {
                     }
                 }
             });
-
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &base_router,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         expected_data
@@ -529,8 +612,15 @@ mod test {
                     }
                 }
             });
-
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &base_router, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &base_router,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         expected_data
@@ -548,7 +638,15 @@ mod test {
     fn test_no_blend_no_beard() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_0_0.chunk");
-        let mut chunk = ProtoChunk::new(Vector2::new(0, 0), &BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(0, 0),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         assert_eq!(
@@ -565,7 +663,15 @@ mod test {
     fn test_no_blend_no_beard_aquifer() {
         let expected_data: Vec<u16> =
             read_data_from_file!("../../assets/no_blend_no_beard_7_4.chunk");
-        let mut chunk = ProtoChunk::new(Vector2::new(7, 4), &BASE_NOISE_ROUTER, &RANDOM_CONFIG);
+        let surface_config = GENERATION_SETTINGS
+            .get(&GeneratorSetting::Overworld)
+            .unwrap();
+        let mut chunk = ProtoChunk::new(
+            Vector2::new(7, 4),
+            &BASE_NOISE_ROUTER,
+            &RANDOM_CONFIG,
+            surface_config,
+        );
         chunk.populate_noise();
 
         assert_eq!(
