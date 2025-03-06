@@ -1,4 +1,3 @@
-use num_traits::Float;
 pub mod perlin;
 pub mod simplex;
 

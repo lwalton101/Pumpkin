@@ -19,7 +19,6 @@ use super::{
         },
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{IndexToNoisePos, NoisePos, UnblendedNoisePos},
-        multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::GlobalProtoNoiseRouter,
     },
     ore_sampler::OreVeinSampler,
@@ -27,7 +26,6 @@ use super::{
     settings::GenerationShapeConfig,
 };
 
-pub const STONE_BLOCK: BlockState = block_state!("stone");
 pub const LAVA_BLOCK: BlockState = block_state!("lava");
 pub const WATER_BLOCK: BlockState = block_state!("water");
 

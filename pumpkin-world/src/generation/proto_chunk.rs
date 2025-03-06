@@ -11,7 +11,7 @@ use super::{
     GlobalRandomConfig,
     aquifer_sampler::{FluidLevel, FluidLevelSampler, FluidLevelSamplerImpl},
     biome_coords,
-    chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, STONE_BLOCK, WATER_BLOCK},
+    chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::GlobalProtoNoiseRouter,
@@ -19,6 +19,7 @@ use super::{
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
     settings::GenerationSettings,
+    surface::MaterialRuleContext,
 };
 
 pub struct StandardChunkFluidLevelSampler {
@@ -80,7 +81,9 @@ pub struct ProtoChunk<'a> {
     chunk_pos: Vector2<i32>,
     pub sampler: ChunkNoiseGenerator<'a>,
     pub multi_noise_sampler: MultiNoiseSampler<'a>,
+    random_config: &'a GlobalRandomConfig,
     settings: &'a GenerationSettings,
+    default_block: BlockState,
     // These are local positions
     flat_block_map: Vec<BlockState>,
     flat_biome_map: Vec<Biome>,
@@ -133,10 +136,12 @@ impl<'a> ProtoChunk<'a> {
             horizontal_biome_end as usize,
         );
         let multi_noise_sampler = MultiNoiseSampler::generate(base_router, &multi_noise_config);
-
+        let default_block = BlockState::new(&settings.default_block.name).unwrap();
         Self {
             chunk_pos,
             settings,
+            default_block,
+            random_config,
             sampler,
             multi_noise_sampler,
             flat_block_map: vec![
@@ -291,7 +296,6 @@ impl<'a> ProtoChunk<'a> {
                                     assert!(cell_offset_z >= 0);
                                 }
 
-                                // TODO: Change default block
                                 let block_state = self
                                     .sampler
                                     .sample_block_state(
@@ -302,7 +306,7 @@ impl<'a> ProtoChunk<'a> {
                                         cell_offset_y as usize,
                                         cell_offset_z as usize,
                                     )
-                                    .unwrap_or(STONE_BLOCK);
+                                    .unwrap_or(self.default_block);
                                 //log::debug!("Sampled block state in {:?}", inst.elapsed());
 
                                 let local_pos = Vector3 {
@@ -332,10 +336,16 @@ impl<'a> ProtoChunk<'a> {
         }
     }
 
-    pub fn build_surface(&self) {
+    pub fn build_surface(&mut self) {
         let start_x = self.chunk_pos.x;
         let start_z = self.chunk_pos.z;
 
+        let mut context = MaterialRuleContext {
+            min_y: self.settings.noise.min_y,
+            height: self.settings.noise.height,
+            random_deriver: &self.random_config.base_random_deriver,
+            block_pos: Vector3::new(0, 0, 0),
+        };
         for x in 0..16 {
             for z in 0..16 {
                 let x = start_x + x;
@@ -345,6 +355,15 @@ impl<'a> ProtoChunk<'a> {
                     let state = self.get_block_state(&Vector3::new(x, y as i32, z));
                     if state.is_air() {
                         continue;
+                    }
+                    let pos = Vector3::new(x, y as i32, z);
+                    context.block_pos = pos;
+                    let new_state = self.settings.surface_rule.try_apply(&context);
+                    if state != self.default_block || new_state.is_none() {
+                        continue;
+                    }
+                    if let Some(state) = new_state {
+                        self.set_block_state(&pos, state);
                     }
                 }
             }

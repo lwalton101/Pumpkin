@@ -20,7 +20,7 @@ pub enum BlockDirection {
 #[derive(Deserialize)]
 #[serde(rename_all = "PascalCase")]
 pub struct BlockStateCodec {
-    name: String,
+    pub name: String,
     // TODO: properties...
 }
 

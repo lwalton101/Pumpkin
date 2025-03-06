@@ -42,6 +42,7 @@ impl WorldGenerator for VanillaGenerator {
             ProtoChunk::new(at, &self.base_router, &self.random_config, surface_config);
         proto_chunk.populate_biomes();
         proto_chunk.populate_noise();
+        proto_chunk.build_surface();
 
         for x in 0..16u8 {
             for z in 0..16u8 {
