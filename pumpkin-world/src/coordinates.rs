@@ -21,7 +21,7 @@ impl Height {
             .get(&GeneratorSetting::Overworld)
             .unwrap();
 
-        Self(height as i16 - surface_config.noise.min_y.abs() as i16)
+        Self((height as i32 + surface_config.noise.min_y as i32) as i16)
     }
 
     /// Absolute height ranges from `0..WORLD_HEIGHT`
@@ -31,7 +31,7 @@ impl Height {
             .get(&GeneratorSetting::Overworld)
             .unwrap();
 
-        (self.0 + surface_config.noise.min_y.abs() as i16) as u16
+        (self.0 as i32 - surface_config.noise.min_y as i32) as u16
     }
 }
 

@@ -22,6 +22,8 @@ pub struct VanillaGenerator {
 impl GeneratorInit for VanillaGenerator {
     fn new(seed: Seed) -> Self {
         let random_config = GlobalRandomConfig::new(seed.0);
+        // TODO: The generation settings contains (part of?) the noise routers too; do we keep the seperate or
+        // use only the generation settings?
         let base_router =
             GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);
         Self {
@@ -35,11 +37,15 @@ impl WorldGenerator for VanillaGenerator {
     fn generate_chunk(&self, at: Vector2<i32>) -> ChunkData {
         let mut subchunks = Subchunks::Single(0);
         // TODO: This is bad, but it works
-        let surface_config = GENERATION_SETTINGS
+        let generation_settings = GENERATION_SETTINGS
             .get(&GeneratorSetting::Overworld)
             .unwrap();
-        let mut proto_chunk =
-            ProtoChunk::new(at, &self.base_router, &self.random_config, surface_config);
+        let mut proto_chunk = ProtoChunk::new(
+            at,
+            &self.base_router,
+            &self.random_config,
+            generation_settings,
+        );
         proto_chunk.populate_biomes();
         proto_chunk.populate_noise();
         proto_chunk.build_surface();
@@ -47,16 +53,15 @@ impl WorldGenerator for VanillaGenerator {
         for x in 0..16u8 {
             for z in 0..16u8 {
                 // TODO: This can be chunk specific
-                let max_y = surface_config.noise.height as i16 - surface_config.noise.min_y.abs() as i16;
-                for y in (surface_config.noise.min_y..max_y as i8).rev() {
+                for y in 0..generation_settings.noise.height {
+                    let y = generation_settings.noise.min_y as i32 + y as i32;
                     let coordinates = ChunkRelativeBlockCoordinates {
                         x: x.into(),
                         y: y.into(),
                         z: z.into(),
                     };
 
-                    let block =
-                        proto_chunk.get_block_state(&Vector3::new(x.into(), y.into(), z.into()));
+                    let block = proto_chunk.get_block_state(&Vector3::new(x.into(), y, z.into()));
 
                     subchunks.set_block(coordinates, block.state_id);
                 }

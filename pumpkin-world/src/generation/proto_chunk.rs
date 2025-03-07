@@ -117,7 +117,7 @@ impl<'a> ProtoChunk<'a> {
             horizontal_cell_count,
             start_x,
             start_z,
-            &generation_shape,
+            generation_shape,
             sampler,
             true,
             true,
