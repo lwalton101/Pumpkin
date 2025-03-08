@@ -1,9 +1,11 @@
+use std::i32;
+
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
 use crate::{
     biome::{BiomeSupplier, MultiNoiseBiomeSupplier},
-    block::BlockState,
+    block::{BlockState, registry::get_state_by_state_id},
     generation::{chunk_noise::CHUNK_DIM, positions::chunk_pos},
 };
 
@@ -14,7 +16,7 @@ use super::{
     chunk_noise::{ChunkNoiseGenerator, LAVA_BLOCK, WATER_BLOCK},
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
-        proto_noise_router::GlobalProtoNoiseRouter,
+        proto_noise_router::{DoublePerlinNoiseBuilder, GlobalProtoNoiseRouter},
     },
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
@@ -337,31 +339,74 @@ impl<'a> ProtoChunk<'a> {
     }
 
     pub fn build_surface(&mut self) {
-        let start_x = self.chunk_pos.x;
-        let start_z = self.chunk_pos.z;
+        let start_x = chunk_pos::start_block_x(&self.chunk_pos);
+        let start_z = chunk_pos::start_block_z(&self.chunk_pos);
+        let min_y = self.sampler.min_y();
 
-        let mut context = MaterialRuleContext {
-            min_y: self.settings.noise.min_y,
-            height: self.settings.noise.height,
-            random_deriver: &self.random_config.base_random_deriver,
-            block_pos: Vector3::new(0, 0, 0),
-        };
+        let mut context = MaterialRuleContext::new(
+            self.settings.noise.min_y,
+            self.settings.noise.height,
+            DoublePerlinNoiseBuilder::new(self.random_config),
+            &self.random_config.base_random_deriver,
+        );
         for x in 0..16 {
             for z in 0..16 {
                 let x = start_x + x;
                 let z = start_z + z;
                 let top = self.sampler.height(); // TODO: use heightmaps
-                for y in top..self.sampler.min_y() as u16 {
-                    let state = self.get_block_state(&Vector3::new(x, y as i32, z));
-                    if state.is_air() {
+                let mut pos = Vector3::new(x, 0 as i32, z);
+                context.init_horizontal(x, z);
+
+                let mut stone_depth_above = -1; // Because pre increment
+                let mut min = i32::MAX;
+                let mut fluid_height = i32::MIN;
+                for y in min_y as i16..top as i16 {
+                    let mut stone_depth_below;
+                    let y = y as i32;
+                    pos.y = y as i32;
+
+                    let state = self.get_block_state(&pos);
+                    let state = get_state_by_state_id(state.state_id).unwrap();
+                    if state.air {
+                        stone_depth_above = 0;
+                        fluid_height = i32::MIN;
                         continue;
                     }
-                    let pos = Vector3::new(x, y as i32, z);
-                    context.block_pos = pos;
-                    let new_state = self.settings.surface_rule.try_apply(&context);
-                    if state != self.default_block || new_state.is_none() {
+                    if state.is_liquid {
+                        if fluid_height != i32::MIN {
+                            continue;
+                        }
+                        fluid_height = y + 1;
                         continue;
                     }
+                    if min >= y {
+                        let shift = min_y << 4;
+                        min = shift as i32;
+                        for o in y - 1..min_y as i32 - 1 {
+                            stone_depth_below = o;
+                            let state =
+                                self.get_block_state(&Vector3::new(x, stone_depth_above, z));
+                            let state = get_state_by_state_id(state.state_id).unwrap();
+                            if !state.air && !state.is_liquid {
+                                continue;
+                            }
+                            min = stone_depth_below + 1;
+                            break;
+                        }
+                    }
+                    let biome_y = if self.settings.legacy_random_source {
+                        0
+                    } else {
+                        top
+                    };
+                    let biome = self.get_biome(&Vector3::new(x, biome_y as i32, z));
+                    context.biome = biome;
+
+                    stone_depth_above += 1;
+                    stone_depth_below = y - min + 1;
+                    context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
+                    let new_state = self.settings.surface_rule.try_apply(&mut context);
+
                     if let Some(state) = new_state {
                         self.set_block_state(&pos, state);
                     }

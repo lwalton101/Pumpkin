@@ -1,5 +1,14 @@
-use pumpkin_util::{math::vector3::Vector3, random::RandomDeriver};
+use pumpkin_data::chunk::Biome;
+use pumpkin_util::{
+    math::{vector3::Vector3, vertical_surface_type::VerticalSurfaceType},
+    random::RandomDeriver,
+};
 use serde::Deserialize;
+
+use super::{
+    noise::perlin::DoublePerlinNoiseSampler,
+    noise_router::proto_noise_router::DoublePerlinNoiseBuilder,
+};
 
 pub mod rule;
 
@@ -7,7 +16,89 @@ pub struct MaterialRuleContext<'a> {
     pub min_y: i8,
     pub height: u16,
     pub random_deriver: &'a RandomDeriver,
+    fluid_height: i32,
     pub block_pos: Vector3<i32>,
+    pub biome: Biome,
+    pub run_depth: i32,
+    pub secondary_depth: f64,
+    noise_builder: DoublePerlinNoiseBuilder<'a>,
+    last_unique_horizontal_pos_value: i64,
+    unique_horizontal_pos_value: i64,
+    pub surface_noise: DoublePerlinNoiseSampler,
+    pub secoundary_noise: DoublePerlinNoiseSampler,
+    pub stone_depth_below: i32,
+    pub stone_depth_above: i32,
+}
+
+impl<'a> MaterialRuleContext<'a> {
+    pub fn new(
+        min_y: i8,
+        height: u16,
+        mut noise_builder: DoublePerlinNoiseBuilder<'a>,
+        random_deriver: &'a RandomDeriver,
+    ) -> Self {
+        const HORIZONTAL_POS: i64 = -9223372036854775807; // Vanilla
+        Self {
+            min_y,
+            height,
+            unique_horizontal_pos_value: HORIZONTAL_POS - 1, // Because pre increment
+            last_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
+            random_deriver,
+            fluid_height: 0,
+            block_pos: Vector3::new(0, 0, 0),
+            biome: Biome::Plains,
+            run_depth: 0,
+            secondary_depth: 0.0,
+            surface_noise: noise_builder.get_noise_sampler_for_id("surface"),
+            secoundary_noise: noise_builder.get_noise_sampler_for_id("surface_secondary"),
+            noise_builder,
+            stone_depth_below: 0,
+            stone_depth_above: 0,
+        }
+    }
+
+    fn sample_run_depth(&self) -> i32 {
+        let noise =
+            self.surface_noise
+                .sample(self.block_pos.x as f64, 0.0, self.block_pos.z as f64);
+        (noise * 2.75
+            + 3.0
+            + self
+                .random_deriver
+                .split_pos(self.block_pos.x, 0, self.block_pos.z)
+                .next_f64()
+                * 0.25) as i32
+    }
+
+    pub fn init_horizontal(&mut self, x: i32, z: i32) {
+        self.unique_horizontal_pos_value += 1;
+        self.block_pos.x = x;
+        self.block_pos.z = z;
+        self.run_depth = self.sample_run_depth();
+    }
+
+    pub fn init_vertical(
+        &mut self,
+        stone_depth_above: i32,
+        stone_depth_below: i32,
+        y: i32,
+        fluid_height: i32,
+    ) {
+        self.block_pos.y = y;
+        self.fluid_height = fluid_height;
+        self.stone_depth_below = stone_depth_below;
+        self.stone_depth_above = stone_depth_above;
+    }
+
+    pub fn get_secoundary_depth(&mut self) -> f64 {
+        if self.last_unique_horizontal_pos_value != self.unique_horizontal_pos_value {
+            self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
+            self.secondary_depth =
+                self.secoundary_noise
+                    .sample(self.block_pos.x as f64, 0.0, self.block_pos.z as f64)
+        }
+        self.secondary_depth
+    }
 }
 
 #[derive(Deserialize)]
@@ -15,46 +106,179 @@ pub struct MaterialRuleContext<'a> {
 #[serde(rename_all = "snake_case")]
 pub enum MaterialCondition {
     #[serde(rename = "minecraft:biome")]
-    Biome,
+    Biome(BiomeMaterialCondition),
     #[serde(rename = "minecraft:noise_threshold")]
-    NoiseThreshold,
+    NoiseThreshold(NoiseThresholdMaterialCondition),
     #[serde(rename = "minecraft:vertical_gradient")]
     VerticalGradient(VerticalGradientMaterialCondition),
     #[serde(rename = "minecraft:y_above")]
-    YAbove,
+    YAbove(AboveYMaterialCondition),
     #[serde(rename = "minecraft:water")]
-    Water,
+    Water(WaterMaterialCondition),
     #[serde(rename = "minecraft:temperature")]
     Temperature,
     #[serde(rename = "minecraft:steep")]
     Steep,
     #[serde(rename = "minecraft:not")]
-    Not,
+    Not(NotMaterialCondition),
     #[serde(rename = "minecraft:hole")]
-    Hole,
+    Hole(HoleMaterialCondition),
     #[serde(rename = "minecraft:above_preliminary_surface")]
-    AbovePreliminarySurface,
+    AbovePreliminarySurface(SurfaceMaterialCondition),
     #[serde(rename = "minecraft:stone_depth")]
-    StoneDepth,
+    StoneDepth(StoneDepthMaterialCondition),
 }
 
 impl MaterialCondition {
-    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+    pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
         match self {
-            MaterialCondition::Biome => todo!(),
-            MaterialCondition::NoiseThreshold => todo!(),
-            MaterialCondition::VerticalGradient(vertical_gradient_material_condition) => {
-                vertical_gradient_material_condition.test(context)
+            MaterialCondition::Biome(biome) => biome.test(context),
+            MaterialCondition::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
+            MaterialCondition::VerticalGradient(vertical_gradient) => {
+                vertical_gradient.test(context)
             }
-            MaterialCondition::YAbove => todo!(),
-            MaterialCondition::Water => todo!(),
-            MaterialCondition::Temperature => todo!(),
-            MaterialCondition::Steep => todo!(),
-            MaterialCondition::Not => todo!(),
-            MaterialCondition::Hole => todo!(),
-            MaterialCondition::AbovePreliminarySurface => todo!(),
-            MaterialCondition::StoneDepth => todo!(),
+            MaterialCondition::YAbove(above_y) => above_y.test(context),
+            MaterialCondition::Water(water) => water.test(context),
+            MaterialCondition::Temperature => false,
+            MaterialCondition::Steep => false,
+            MaterialCondition::Not(not) => not.test(context),
+            MaterialCondition::Hole(hole) => hole.test(context),
+            MaterialCondition::AbovePreliminarySurface(above) => above.test(context),
+            MaterialCondition::StoneDepth(stone_depth) => stone_depth.test(context),
         }
+    }
+}
+
+#[derive(Deserialize)]
+pub struct HoleMaterialCondition;
+
+impl HoleMaterialCondition {
+    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+        context.run_depth <= 0
+    }
+}
+
+#[derive(Deserialize)]
+pub struct AboveYMaterialCondition {
+    anchor: YOffsetCodec,
+    surface_depth_multiplier: i32,
+    add_stone_depth: bool,
+}
+
+impl AboveYMaterialCondition {
+    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+        context.block_pos.y
+            + if self.add_stone_depth {
+                context.stone_depth_above
+            } else {
+                0
+            }
+            >= self.anchor.get_y(context) as i32 + context.run_depth * self.surface_depth_multiplier
+    }
+}
+
+#[derive(Deserialize)]
+pub struct NotMaterialCondition {
+    invert: Box<MaterialCondition>,
+}
+
+impl NotMaterialCondition {
+    pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
+        !self.invert.test(context)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct SurfaceMaterialCondition;
+
+impl SurfaceMaterialCondition {
+    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+        // TODO
+        context.block_pos.y >= 60
+    }
+}
+
+#[derive(Deserialize)]
+pub struct BiomeMaterialCondition {
+    biome_is: Vec<Biome>,
+}
+
+impl BiomeMaterialCondition {
+    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+        self.biome_is.contains(&context.biome)
+    }
+}
+
+#[derive(Deserialize)]
+pub struct NoiseThresholdMaterialCondition {
+    noise: String,
+    min_threshold: f64,
+    max_threshold: f64,
+}
+
+impl NoiseThresholdMaterialCondition {
+    pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
+        let sampler = context
+            .noise_builder
+            .get_noise_sampler_for_id(&self.noise.replace("minecraft:", ""));
+        let value = sampler.sample(context.block_pos.x as f64, 0.0, context.block_pos.z as f64);
+        value >= self.min_threshold && value <= self.max_threshold
+    }
+}
+
+#[derive(Deserialize)]
+pub struct StoneDepthMaterialCondition {
+    offset: i32,
+    add_surface_depth: bool,
+    secondary_depth_range: i32,
+    surface_type: VerticalSurfaceType,
+}
+
+impl StoneDepthMaterialCondition {
+    pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
+        let stone_depth = match &self.surface_type {
+            VerticalSurfaceType::Ceiling => context.stone_depth_below,
+            VerticalSurfaceType::Floor => context.stone_depth_above,
+        };
+        let depth = if self.add_surface_depth {
+            context.run_depth
+        } else {
+            0
+        };
+        let depth_range = if self.secondary_depth_range == 0 {
+            0
+        } else {
+            pumpkin_util::math::map(
+                context.get_secoundary_depth(),
+                -1.0,
+                1.0,
+                0.0,
+                self.secondary_depth_range as f64,
+            ) as i32
+        };
+        return stone_depth <= 1 + self.offset + depth + depth_range;
+    }
+}
+
+#[derive(Deserialize)]
+pub struct WaterMaterialCondition {
+    offset: i32,
+    surface_depth_multiplier: i32,
+    add_stone_depth: bool,
+}
+
+impl WaterMaterialCondition {
+    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+        context.fluid_height == i32::MIN
+            || context.block_pos.y
+                + (if self.add_stone_depth {
+                    context.stone_depth_above
+                } else {
+                    0
+                })
+                >= context.fluid_height
+                    + self.offset
+                    + context.run_depth * self.surface_depth_multiplier
     }
 }
 
@@ -111,7 +335,7 @@ impl YOffsetCodec {
 
 #[derive(Deserialize)]
 pub struct Absolute {
-    absolute: i8,
+    absolute: u16,
 }
 
 #[derive(Deserialize)]

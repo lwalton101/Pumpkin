@@ -18,12 +18,12 @@ pub enum MaterialRule {
 }
 
 impl MaterialRule {
-    pub fn try_apply(&self, context: &MaterialRuleContext) -> Option<BlockState> {
+    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<BlockState> {
         match self {
             MaterialRule::Badlands => todo!(),
             MaterialRule::Block(block) => block.try_apply(),
             MaterialRule::Sequence(sequence) => sequence.try_apply(context),
-            MaterialRule::Condition(condition) => condition.try_apply(&context),
+            MaterialRule::Condition(condition) => condition.try_apply(context),
         }
     }
 }
@@ -45,7 +45,7 @@ pub struct SequenceMaterialRule {
 }
 
 impl SequenceMaterialRule {
-    pub fn try_apply(&self, context: &MaterialRuleContext) -> Option<BlockState> {
+    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<BlockState> {
         for seq in &self.sequence {
             if let Some(state) = seq.try_apply(context) {
                 return Some(state);
@@ -62,7 +62,7 @@ pub struct ConditionMaterialRule {
 }
 
 impl ConditionMaterialRule {
-    pub fn try_apply(&self, context: &MaterialRuleContext) -> Option<BlockState> {
+    pub fn try_apply(&self, context: &mut MaterialRuleContext) -> Option<BlockState> {
         if self.if_true.test(context) {
             return self.then_run.try_apply(context);
         }

@@ -145,6 +145,7 @@ pub struct Property {
 pub struct State {
     pub id: u16,
     pub air: bool,
+    pub is_liquid: bool,
     pub luminance: u8,
     pub burnable: bool,
     pub tool_required: bool,
