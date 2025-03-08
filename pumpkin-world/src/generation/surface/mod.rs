@@ -258,8 +258,8 @@ impl SurfaceMaterialCondition {
                         );
                 }
                 let surface = lerp2(
-                    (context.block_pos.x & 0xF) as f64 / 16.0,
-                    (context.block_pos.z & 0xF) as f64 / 16.0,
+                    ((context.block_pos.x & 15) as f32 / 16.0) as f64,
+                    ((context.block_pos.z & 15) as f32 / 16.0) as f64,
                     context.estimated_surface_heights[0] as f64,
                     context.estimated_surface_heights[1] as f64,
                     context.estimated_surface_heights[2] as f64,

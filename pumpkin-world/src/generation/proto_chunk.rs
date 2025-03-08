@@ -383,9 +383,8 @@ impl<'a> ProtoChunk<'a> {
                 let mut stone_depth_above = -1; // Because pre increment
                 let mut min = i32::MAX;
                 let mut fluid_height = i32::MIN;
-                for y in min_y as i16..top as i16 {
+                for y in (min_y as i32..=top as i32).rev() {
                     let mut stone_depth_below;
-                    let y = y as i32;
                     pos.y = y;
 
                     let state = self.get_block_state(&pos);
