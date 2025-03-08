@@ -7,11 +7,12 @@ use pumpkin_util::{
 use crate::block::BlockState;
 
 use super::{
-    chunk_noise::{ChunkNoiseHeightEstimator, LAVA_BLOCK, WATER_BLOCK},
+    chunk_noise::{LAVA_BLOCK, WATER_BLOCK},
     noise_router::{
         chunk_density_function::ChunkNoiseFunctionSampleOptions,
         chunk_noise_router::ChunkNoiseRouter,
         density_function::{NoisePos, UnblendedNoisePos},
+        surface_height_sampler::SurfaceHeightEstimateSampler,
     },
     positions::{MIN_HEIGHT_CELL, block_pos, chunk_pos},
     proto_chunk::StandardChunkFluidLevelSampler,
@@ -236,7 +237,7 @@ impl WorldAquiferSampler {
         &mut self,
         packed_pos: i64,
         router: &mut ChunkNoiseRouter,
-        height_estimator: &mut ChunkNoiseHeightEstimator,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> FluidLevel {
         let x = block_pos::unpack_x(packed_pos);
@@ -264,7 +265,7 @@ impl WorldAquiferSampler {
         block_y: i32,
         block_z: i32,
         router: &mut ChunkNoiseRouter,
-        height_estimator: &mut ChunkNoiseHeightEstimator,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
         sample_options: &ChunkNoiseFunctionSampleOptions,
     ) -> FluidLevel {
         let fluid_level = self.fluid_level.get_fluid_level(block_x, block_y, block_z);
@@ -277,7 +278,7 @@ impl WorldAquiferSampler {
             let x = block_x + section_coords::section_to_block(offset.x as i32);
             let z = block_z + section_coords::section_to_block(offset.z as i32);
 
-            let n = height_estimator.estimate_surface_height(router, sample_options, x, z);
+            let n = height_estimator.estimate_height(x, z);
             let o = n + 8;
             let bl2 = offset.x == 0 && offset.z == 0;
 
@@ -436,7 +437,7 @@ impl WorldAquiferSampler {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-        height_estimator: &mut ChunkNoiseHeightEstimator,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
         density: f64,
     ) -> Option<BlockState> {
         if density > 0f64 {
@@ -593,7 +594,7 @@ impl AquiferSamplerImpl for WorldAquiferSampler {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-        height_estimator: &mut ChunkNoiseHeightEstimator,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<BlockState> {
         let density = router.final_density(pos, sample_options);
         self.apply_internal(router, pos, sample_options, height_estimator, density)
@@ -616,7 +617,7 @@ impl AquiferSamplerImpl for SeaLevelAquiferSampler {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-        _height_estimator: &mut ChunkNoiseHeightEstimator,
+        _height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<BlockState> {
         let sample = router.final_density(pos, sample_options);
         //log::debug!("Aquifer sample {:?}: {}", &pos, sample);
@@ -639,7 +640,7 @@ pub trait AquiferSamplerImpl {
         router: &mut ChunkNoiseRouter,
         pos: &impl NoisePos,
         sample_options: &ChunkNoiseFunctionSampleOptions,
-        height_estimator: &mut ChunkNoiseHeightEstimator,
+        height_estimator: &mut SurfaceHeightEstimateSampler,
     ) -> Option<BlockState>;
 }
 
@@ -652,16 +653,19 @@ mod test {
     use crate::{
         block::BlockState,
         generation::{
-            GlobalRandomConfig,
+            GlobalRandomConfig, biome_coords,
             chunk_noise::{
-                BlockStateSampler, ChainedBlockStateSampler, ChunkNoiseGenerator,
-                ChunkNoiseHeightEstimator, LAVA_BLOCK, WATER_BLOCK,
+                BlockStateSampler, CHUNK_DIM, ChainedBlockStateSampler, ChunkNoiseGenerator,
+                LAVA_BLOCK, WATER_BLOCK,
             },
             noise_router::{
                 chunk_density_function::{ChunkNoiseFunctionSampleOptions, SampleAction},
                 chunk_noise_router::ChunkNoiseRouter,
                 density_function::UnblendedNoisePos,
                 proto_noise_router::GlobalProtoNoiseRouter,
+                surface_height_sampler::{
+                    SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+                },
             },
             positions::chunk_pos,
             proto_chunk::StandardChunkFluidLevelSampler,
@@ -685,7 +689,7 @@ mod test {
     ) -> (
         WorldAquiferSampler,
         ChunkNoiseRouter,
-        ChunkNoiseHeightEstimator,
+        SurfaceHeightEstimateSampler,
         ChunkNoiseFunctionSampleOptions,
     ) {
         let surface_config = GENERATION_SETTINGS
@@ -729,7 +733,23 @@ mod test {
             _ => unreachable!(),
         };
 
-        (aquifer, noise.router, noise.height_estimator, options)
+        let horizontal_cell_count = CHUNK_DIM / shape.horizontal_cell_block_count();
+
+        let horizontal_biome_end =
+            biome_coords::from_block(horizontal_cell_count * shape.horizontal_cell_block_count());
+
+        let surface_height_estimator_options = SurfaceHeightSamplerBuilderOptions::new(
+            chunk_pos.x,
+            chunk_pos.z,
+            horizontal_biome_end as usize,
+            shape.min_y as i32,
+            shape.max_y() as i32,
+            shape.vertical_cell_block_count() as usize,
+        );
+        let height_estimator =
+            SurfaceHeightEstimateSampler::generate(base_router, &surface_height_estimator_options);
+
+        (aquifer, noise.router, height_estimator, options)
     }
 
     #[test]

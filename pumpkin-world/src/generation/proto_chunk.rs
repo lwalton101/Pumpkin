@@ -15,6 +15,9 @@ use super::{
     noise_router::{
         multi_noise_sampler::{MultiNoiseSampler, MultiNoiseSamplerBuilderOptions},
         proto_noise_router::{DoublePerlinNoiseBuilder, GlobalProtoNoiseRouter},
+        surface_height_sampler::{
+            SurfaceHeightEstimateSampler, SurfaceHeightSamplerBuilderOptions,
+        },
     },
     positions::chunk_pos::{start_block_x, start_block_z},
     section_coords,
@@ -79,8 +82,10 @@ impl FluidLevelSamplerImpl for StandardChunkFluidLevelSampler {
 ///
 pub struct ProtoChunk<'a> {
     chunk_pos: Vector2<i32>,
-    pub sampler: ChunkNoiseGenerator<'a>,
+    pub noise_sampler: ChunkNoiseGenerator<'a>,
+    // TODO: These can technically go to an even higher level and we can reuse them across chunks
     pub multi_noise_sampler: MultiNoiseSampler<'a>,
+    pub surface_height_estimate_sampler: SurfaceHeightEstimateSampler<'a>,
     random_config: &'a GlobalRandomConfig,
     settings: &'a GenerationSettings,
     default_block: BlockState,
@@ -136,14 +141,27 @@ impl<'a> ProtoChunk<'a> {
             horizontal_biome_end as usize,
         );
         let multi_noise_sampler = MultiNoiseSampler::generate(base_router, &multi_noise_config);
+
+        let surface_config = SurfaceHeightSamplerBuilderOptions::new(
+            biome_pos.x,
+            biome_pos.z,
+            horizontal_biome_end as usize,
+            generation_shape.min_y as i32,
+            generation_shape.max_y() as i32,
+            generation_shape.vertical_cell_block_count() as usize,
+        );
+        let surface_height_estimate_sampler =
+            SurfaceHeightEstimateSampler::generate(base_router, &surface_config);
+
         let default_block = BlockState::new(&settings.default_block.name).unwrap();
         Self {
             chunk_pos,
             settings,
             default_block,
             random_config,
-            sampler,
+            noise_sampler: sampler,
             multi_noise_sampler,
+            surface_height_estimate_sampler,
             flat_block_map: vec![
                 BlockState::AIR;
                 CHUNK_DIM as usize * CHUNK_DIM as usize * height as usize
@@ -160,10 +178,10 @@ impl<'a> ProtoChunk<'a> {
         #[cfg(debug_assertions)]
         {
             assert!(local_pos.x >= 0 && local_pos.x <= 15);
-            assert!(local_pos.y < self.sampler.height() as i32 && local_pos.y >= 0);
+            assert!(local_pos.y < self.noise_sampler.height() as i32 && local_pos.y >= 0);
             assert!(local_pos.z >= 0 && local_pos.z <= 15);
         }
-        self.sampler.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
+        self.noise_sampler.height() as usize * CHUNK_DIM as usize * local_pos.x as usize
             + CHUNK_DIM as usize * local_pos.y as usize
             + local_pos.z as usize
     }
@@ -172,10 +190,10 @@ impl<'a> ProtoChunk<'a> {
     pub fn get_block_state(&self, local_pos: &Vector3<i32>) -> BlockState {
         let local_pos = Vector3::new(
             local_pos.x & 15,
-            local_pos.y - self.sampler.min_y() as i32,
+            local_pos.y - self.noise_sampler.min_y() as i32,
             local_pos.z & 15,
         );
-        if local_pos.y < 0 || local_pos.y >= self.sampler.height() as i32 {
+        if local_pos.y < 0 || local_pos.y >= self.noise_sampler.height() as i32 {
             BlockState::AIR
         } else {
             self.flat_block_map[self.local_pos_to_index(&local_pos)]
@@ -186,7 +204,7 @@ impl<'a> ProtoChunk<'a> {
     pub fn set_block_state(&mut self, local_pos: &Vector3<i32>, block_state: BlockState) {
         let local_pos = Vector3::new(
             local_pos.x & 15,
-            local_pos.y - self.sampler.min_y() as i32,
+            local_pos.y - self.noise_sampler.min_y() as i32,
             local_pos.z & 15,
         );
         let index = self.local_pos_to_index(&local_pos);
@@ -197,10 +215,10 @@ impl<'a> ProtoChunk<'a> {
     pub fn get_biome(&self, local_pos: &Vector3<i32>) -> Biome {
         let local_pos = Vector3::new(
             local_pos.x & 15,
-            local_pos.y - self.sampler.min_y() as i32,
+            local_pos.y - self.noise_sampler.min_y() as i32,
             local_pos.z & 15,
         );
-        if local_pos.y < 0 || local_pos.y >= self.sampler.height() as i32 {
+        if local_pos.y < 0 || local_pos.y >= self.noise_sampler.height() as i32 {
             Biome::Plains
         } else {
             self.flat_biome_map[self.local_pos_to_index(&local_pos)]
@@ -208,10 +226,11 @@ impl<'a> ProtoChunk<'a> {
     }
 
     pub fn populate_biomes(&mut self) {
-        let min_y = self.sampler.min_y();
+        let min_y = self.noise_sampler.min_y();
         let bottom = section_coords::block_to_section(min_y) as i16;
-        let top = section_coords::block_to_section(min_y as i16 + self.sampler.height() as i16 - 1)
-            as i16;
+        let top =
+            section_coords::block_to_section(min_y as i16 + self.noise_sampler.height() as i16 - 1)
+                as i16;
 
         let start_x = chunk_pos::start_block_x(&self.chunk_pos);
         let start_z = chunk_pos::start_block_z(&self.chunk_pos);
@@ -243,25 +262,26 @@ impl<'a> ProtoChunk<'a> {
     }
 
     pub fn populate_noise(&mut self) {
-        let horizontal_cell_block_count = self.sampler.horizontal_cell_block_count();
-        let vertical_cell_block_count = self.sampler.vertical_cell_block_count();
+        let horizontal_cell_block_count = self.noise_sampler.horizontal_cell_block_count();
+        let vertical_cell_block_count = self.noise_sampler.vertical_cell_block_count();
 
         let horizontal_cells = CHUNK_DIM / horizontal_cell_block_count;
 
-        let min_y = self.sampler.min_y();
+        let min_y = self.noise_sampler.min_y();
         let minimum_cell_y = min_y / vertical_cell_block_count as i8;
-        let cell_height = self.sampler.height() / vertical_cell_block_count as u16;
+        let cell_height = self.noise_sampler.height() / vertical_cell_block_count as u16;
 
         // TODO: Block state updates when we implement those
-        self.sampler.sample_start_density();
+        self.noise_sampler.sample_start_density();
         for cell_x in 0..horizontal_cells {
-            self.sampler.sample_end_density(cell_x);
+            self.noise_sampler.sample_end_density(cell_x);
             let sample_start_x =
                 (self.start_cell_x() + cell_x as i32) * horizontal_cell_block_count as i32;
 
             for cell_z in 0..horizontal_cells {
                 for cell_y in (0..cell_height).rev() {
-                    self.sampler.on_sampled_cell_corners(cell_x, cell_y, cell_z);
+                    self.noise_sampler
+                        .on_sampled_cell_corners(cell_x, cell_y, cell_z);
                     let sample_start_y =
                         (minimum_cell_y as i32 + cell_y as i32) * vertical_cell_block_count as i32;
                     let sample_start_z =
@@ -271,21 +291,21 @@ impl<'a> ProtoChunk<'a> {
                             * vertical_cell_block_count as i32
                             + local_y as i32;
                         let delta_y = local_y as f64 / vertical_cell_block_count as f64;
-                        self.sampler.interpolate_y(delta_y);
+                        self.noise_sampler.interpolate_y(delta_y);
 
                         for local_x in 0..horizontal_cell_block_count {
                             let block_x = self.start_block_x()
                                 + cell_x as i32 * horizontal_cell_block_count as i32
                                 + local_x as i32;
                             let delta_x = local_x as f64 / horizontal_cell_block_count as f64;
-                            self.sampler.interpolate_x(delta_x);
+                            self.noise_sampler.interpolate_x(delta_x);
 
                             for local_z in 0..horizontal_cell_block_count {
                                 let block_z = self.start_block_z()
                                     + cell_z as i32 * horizontal_cell_block_count as i32
                                     + local_z as i32;
                                 let delta_z = local_z as f64 / horizontal_cell_block_count as f64;
-                                self.sampler.interpolate_z(delta_z);
+                                self.noise_sampler.interpolate_z(delta_z);
 
                                 // TODO: Can the math here be simplified? Do the above values come
                                 // to the same results?
@@ -301,14 +321,15 @@ impl<'a> ProtoChunk<'a> {
                                 }
 
                                 let block_state = self
-                                    .sampler
+                                    .noise_sampler
                                     .sample_block_state(
-                                        sample_start_x,
-                                        sample_start_y,
-                                        sample_start_z,
-                                        cell_offset_x as usize,
-                                        cell_offset_y as usize,
-                                        cell_offset_z as usize,
+                                        Vector3::new(
+                                            sample_start_x,
+                                            sample_start_y,
+                                            sample_start_z,
+                                        ),
+                                        Vector3::new(cell_offset_x, cell_offset_y, cell_offset_z),
+                                        &mut self.surface_height_estimate_sampler,
                                     )
                                     .unwrap_or(self.default_block);
                                 //log::debug!("Sampled block state in {:?}", inst.elapsed());
@@ -323,7 +344,7 @@ impl<'a> ProtoChunk<'a> {
                                 {
                                     assert!(local_pos.x < 16 && local_pos.x >= 0);
                                     assert!(
-                                        local_pos.y < self.sampler.height() as i32
+                                        local_pos.y < self.noise_sampler.height() as i32
                                             && local_pos.y >= 0
                                     );
                                     assert!(local_pos.z < 16 && local_pos.z >= 0);
@@ -336,14 +357,14 @@ impl<'a> ProtoChunk<'a> {
                 }
             }
 
-            self.sampler.swap_buffers();
+            self.noise_sampler.swap_buffers();
         }
     }
 
     pub fn build_surface(&mut self) {
         let start_x = chunk_pos::start_block_x(&self.chunk_pos);
         let start_z = chunk_pos::start_block_z(&self.chunk_pos);
-        let min_y = self.sampler.min_y();
+        let min_y = self.noise_sampler.min_y();
 
         let mut context = MaterialRuleContext::new(
             self.settings.noise.min_y,
@@ -355,8 +376,8 @@ impl<'a> ProtoChunk<'a> {
             for z in 0..16 {
                 let x = start_x + x;
                 let z = start_z + z;
-                let top = self.sampler.height(); // TODO: use heightmaps
-                let mut pos = Vector3::new(x, 0 as i32, z);
+                let top = self.noise_sampler.height(); // TODO: use heightmaps
+                let mut pos = Vector3::new(x, 0, z);
                 context.init_horizontal(x, z);
 
                 let mut stone_depth_above = -1; // Because pre increment
@@ -365,7 +386,7 @@ impl<'a> ProtoChunk<'a> {
                 for y in min_y as i16..top as i16 {
                     let mut stone_depth_below;
                     let y = y as i32;
-                    pos.y = y as i32;
+                    pos.y = y;
 
                     let state = self.get_block_state(&pos);
                     let state = get_state_by_state_id(state.state_id).unwrap();
@@ -418,11 +439,11 @@ impl<'a> ProtoChunk<'a> {
     }
 
     fn start_cell_x(&self) -> i32 {
-        self.start_block_x() / self.sampler.horizontal_cell_block_count() as i32
+        self.start_block_x() / self.noise_sampler.horizontal_cell_block_count() as i32
     }
 
     fn start_cell_z(&self) -> i32 {
-        self.start_block_z() / self.sampler.horizontal_cell_block_count() as i32
+        self.start_block_z() / self.noise_sampler.horizontal_cell_block_count() as i32
     }
 
     fn start_block_x(&self) -> i32 {
