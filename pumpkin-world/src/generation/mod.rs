@@ -19,7 +19,9 @@ mod surface;
 use derive_getters::Getters;
 pub use generator::WorldGenerator;
 use implementation::VanillaGenerator;
-use pumpkin_util::random::{RandomDeriver, RandomImpl, xoroshiro128::Xoroshiro};
+use pumpkin_util::random::{
+    RandomDeriver, RandomImpl, legacy_rand::LegacyRand, xoroshiro128::Xoroshiro,
+};
 pub use seed::Seed;
 
 use generator::GeneratorInit;
@@ -38,8 +40,12 @@ pub struct GlobalRandomConfig {
 }
 
 impl GlobalRandomConfig {
-    pub fn new(seed: u64) -> Self {
-        let random_deriver = RandomDeriver::Xoroshiro(Xoroshiro::from_seed(seed).next_splitter());
+    pub fn new(seed: u64, legacy: bool) -> Self {
+        let random_deriver = if legacy {
+            RandomDeriver::Legacy(LegacyRand::from_seed(seed).next_splitter())
+        } else {
+            RandomDeriver::Xoroshiro(Xoroshiro::from_seed(seed).next_splitter())
+        };
         let aquifer_deriver = random_deriver
             .split_string("minecraft:aquifer")
             .next_splitter();

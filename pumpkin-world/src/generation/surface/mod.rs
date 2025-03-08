@@ -256,7 +256,7 @@ impl StoneDepthMaterialCondition {
                 self.secondary_depth_range as f64,
             ) as i32
         };
-        return stone_depth <= 1 + self.offset + depth + depth_range;
+        stone_depth <= 1 + self.offset + depth + depth_range
     }
 }
 
@@ -307,7 +307,7 @@ impl VerticalGradientMaterialCondition {
         let maped =
             pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
         let mut random = splitter.split_pos(context.block_pos.x, block_y, context.block_pos.z);
-        return random.next_f32() < maped;
+        random.next_f32() < maped
     }
 }
 

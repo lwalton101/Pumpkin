@@ -674,7 +674,7 @@ mod test {
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
-        LazyLock::new(|| GlobalRandomConfig::new(SEED));
+        LazyLock::new(|| GlobalRandomConfig::new(SEED, false));
     static PROTO_ROUTER: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
         let router_ast = NOISE_ROUTER_ASTS.overworld();
         GlobalProtoNoiseRouter::generate(router_ast, &RANDOM_CONFIG)

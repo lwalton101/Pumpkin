@@ -1,5 +1,3 @@
-use std::i32;
-
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::math::{vector2::Vector2, vector3::Vector3};
 
@@ -212,13 +210,17 @@ impl<'a> ProtoChunk<'a> {
     pub fn populate_biomes(&mut self) {
         let min_y = self.sampler.min_y();
         let bottom = section_coords::block_to_section(min_y) as i16;
-        let top = section_coords::block_to_section(self.sampler.height()) as i16;
+        let top = section_coords::block_to_section(min_y as i16 + self.sampler.height() as i16 - 1)
+            as i16;
 
-        let start_x = biome_coords::from_block(self.chunk_pos.x);
-        let start_z = biome_coords::from_block(self.chunk_pos.z);
+        let start_x = chunk_pos::start_block_x(&self.chunk_pos);
+        let start_z = chunk_pos::start_block_z(&self.chunk_pos);
+
+        let start_x = biome_coords::from_block(start_x);
+        let start_z = biome_coords::from_block(start_z);
 
         for i in bottom..top {
-            let start_y = biome_coords::from_block(i as i32);
+            let start_y = biome_coords::from_chunk(i as i32);
 
             for x in 0..4 {
                 for y in 0..4 {
@@ -455,7 +457,7 @@ mod test {
 
     const SEED: u64 = 0;
     static RANDOM_CONFIG: LazyLock<GlobalRandomConfig> =
-        LazyLock::new(|| GlobalRandomConfig::new(SEED));
+        LazyLock::new(|| GlobalRandomConfig::new(SEED, false)); // TODO: use legacy when needed
     static BASE_NOISE_ROUTER: LazyLock<GlobalProtoNoiseRouter> = LazyLock::new(|| {
         GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &RANDOM_CONFIG)
     });
