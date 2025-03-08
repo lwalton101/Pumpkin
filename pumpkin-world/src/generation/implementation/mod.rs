@@ -22,7 +22,7 @@ pub struct VanillaGenerator {
 impl GeneratorInit for VanillaGenerator {
     fn new(seed: Seed) -> Self {
         let random_config = GlobalRandomConfig::new(seed.0, false);
-        // TODO: The generation settings contains (part of?) the noise routers too; do we keep the seperate or
+        // TODO: The generation settings contains (part of?) the noise routers too; do we keep the separate or
         // use only the generation settings?
         let base_router =
             GlobalProtoNoiseRouter::generate(&NOISE_ROUTER_ASTS.overworld, &random_config);

@@ -428,7 +428,10 @@ impl<'a> ProtoChunk<'a> {
                     stone_depth_above += 1;
                     stone_depth_below = y - min + 1;
                     context.init_vertical(stone_depth_above, stone_depth_below, y, fluid_height);
-                    let new_state = self.settings.surface_rule.try_apply(&mut context);
+                    let new_state = self
+                        .settings
+                        .surface_rule
+                        .try_apply(&mut context, &mut self.surface_height_estimate_sampler);
 
                     if let Some(state) = new_state {
                         self.set_block_state(&pos, state);

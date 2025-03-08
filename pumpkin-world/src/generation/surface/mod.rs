@@ -1,13 +1,20 @@
+use std::i64;
+
 use pumpkin_data::chunk::Biome;
 use pumpkin_util::{
-    math::{vector3::Vector3, vertical_surface_type::VerticalSurfaceType},
+    math::{lerp2, vector2::Vector2, vector3::Vector3, vertical_surface_type::VerticalSurfaceType},
     random::RandomDeriver,
 };
 use serde::Deserialize;
 
+use crate::generation::{positions::chunk_pos, section_coords};
+
 use super::{
     noise::perlin::DoublePerlinNoiseSampler,
-    noise_router::proto_noise_router::DoublePerlinNoiseBuilder,
+    noise_router::{
+        proto_noise_router::DoublePerlinNoiseBuilder,
+        surface_height_sampler::SurfaceHeightEstimateSampler,
+    },
 };
 
 pub mod rule;
@@ -22,10 +29,14 @@ pub struct MaterialRuleContext<'a> {
     pub run_depth: i32,
     pub secondary_depth: f64,
     noise_builder: DoublePerlinNoiseBuilder<'a>,
+    packed_chunk_pos: i64,
+    estimated_surface_heights: [i32; 4],
     last_unique_horizontal_pos_value: i64,
+    last_est_heiht_unique_horizontal_pos_value: i64,
     unique_horizontal_pos_value: i64,
+    surface_min_y: i32,
     pub surface_noise: DoublePerlinNoiseSampler,
-    pub secoundary_noise: DoublePerlinNoiseSampler,
+    pub secondary_noise: DoublePerlinNoiseSampler,
     pub stone_depth_below: i32,
     pub stone_depth_above: i32,
 }
@@ -37,12 +48,16 @@ impl<'a> MaterialRuleContext<'a> {
         mut noise_builder: DoublePerlinNoiseBuilder<'a>,
         random_deriver: &'a RandomDeriver,
     ) -> Self {
-        const HORIZONTAL_POS: i64 = -9223372036854775807; // Vanilla
+        const HORIZONTAL_POS: i64 = -i64::MAX; // Vanilla
         Self {
             min_y,
             height,
+            estimated_surface_heights: [0, 0, 0, 0],
+            surface_min_y: 0,
+            packed_chunk_pos: i64::MAX,
             unique_horizontal_pos_value: HORIZONTAL_POS - 1, // Because pre increment
             last_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
+            last_est_heiht_unique_horizontal_pos_value: HORIZONTAL_POS - 1,
             random_deriver,
             fluid_height: 0,
             block_pos: Vector3::new(0, 0, 0),
@@ -50,7 +65,7 @@ impl<'a> MaterialRuleContext<'a> {
             run_depth: 0,
             secondary_depth: 0.0,
             surface_noise: noise_builder.get_noise_sampler_for_id("surface"),
-            secoundary_noise: noise_builder.get_noise_sampler_for_id("surface_secondary"),
+            secondary_noise: noise_builder.get_noise_sampler_for_id("surface_secondary"),
             noise_builder,
             stone_depth_below: 0,
             stone_depth_above: 0,
@@ -90,11 +105,11 @@ impl<'a> MaterialRuleContext<'a> {
         self.stone_depth_above = stone_depth_above;
     }
 
-    pub fn get_secoundary_depth(&mut self) -> f64 {
+    pub fn get_secondary_depth(&mut self) -> f64 {
         if self.last_unique_horizontal_pos_value != self.unique_horizontal_pos_value {
             self.last_unique_horizontal_pos_value = self.unique_horizontal_pos_value;
             self.secondary_depth =
-                self.secoundary_noise
+                self.secondary_noise
                     .sample(self.block_pos.x as f64, 0.0, self.block_pos.z as f64)
         }
         self.secondary_depth
@@ -130,7 +145,11 @@ pub enum MaterialCondition {
 }
 
 impl MaterialCondition {
-    pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
+    pub fn test(
+        &self,
+        context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) -> bool {
         match self {
             MaterialCondition::Biome(biome) => biome.test(context),
             MaterialCondition::NoiseThreshold(noise_threshold) => noise_threshold.test(context),
@@ -141,9 +160,11 @@ impl MaterialCondition {
             MaterialCondition::Water(water) => water.test(context),
             MaterialCondition::Temperature => false,
             MaterialCondition::Steep => false,
-            MaterialCondition::Not(not) => not.test(context),
+            MaterialCondition::Not(not) => not.test(context, surface_height_estimate_sampler),
             MaterialCondition::Hole(hole) => hole.test(context),
-            MaterialCondition::AbovePreliminarySurface(above) => above.test(context),
+            MaterialCondition::AbovePreliminarySurface(above) => {
+                above.test(context, surface_height_estimate_sampler)
+            }
             MaterialCondition::StoneDepth(stone_depth) => stone_depth.test(context),
         }
     }
@@ -183,8 +204,12 @@ pub struct NotMaterialCondition {
 }
 
 impl NotMaterialCondition {
-    pub fn test(&self, context: &mut MaterialRuleContext) -> bool {
-        !self.invert.test(context)
+    pub fn test(
+        &self,
+        context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) -> bool {
+        !self.invert.test(context, surface_height_estimate_sampler)
     }
 }
 
@@ -192,9 +217,61 @@ impl NotMaterialCondition {
 pub struct SurfaceMaterialCondition;
 
 impl SurfaceMaterialCondition {
-    pub fn test(&self, context: &MaterialRuleContext) -> bool {
+    pub fn test(
+        &self,
+        context: &mut MaterialRuleContext,
+        surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+    ) -> bool {
+        fn estimate_surface_height(
+            context: &mut MaterialRuleContext,
+            surface_height_estimate_sampler: &mut SurfaceHeightEstimateSampler,
+        ) -> i32 {
+            if context.last_est_heiht_unique_horizontal_pos_value
+                != context.unique_horizontal_pos_value
+            {
+                context.last_est_heiht_unique_horizontal_pos_value =
+                    context.unique_horizontal_pos_value;
+                let x = section_coords::block_to_section(context.block_pos.x);
+                let z = section_coords::block_to_section(context.block_pos.z);
+                let packed = chunk_pos::packed(&Vector2::new(x, z)) as i64;
+                if context.packed_chunk_pos != packed {
+                    context.packed_chunk_pos = packed;
+                    context.estimated_surface_heights[0] = surface_height_estimate_sampler
+                        .estimate_height(
+                            section_coords::section_to_block(x),
+                            section_coords::section_to_block(z),
+                        );
+                    context.estimated_surface_heights[1] = surface_height_estimate_sampler
+                        .estimate_height(
+                            section_coords::section_to_block(x + 1),
+                            section_coords::section_to_block(z),
+                        );
+                    context.estimated_surface_heights[2] = surface_height_estimate_sampler
+                        .estimate_height(
+                            section_coords::section_to_block(x),
+                            section_coords::section_to_block(z + 1),
+                        );
+                    context.estimated_surface_heights[3] = surface_height_estimate_sampler
+                        .estimate_height(
+                            section_coords::section_to_block(x + 1),
+                            section_coords::section_to_block(z + 1),
+                        );
+                }
+                let surface = lerp2(
+                    (context.block_pos.x & 0xF) as f64 / 16.0,
+                    (context.block_pos.z & 0xF) as f64 / 16.0,
+                    context.estimated_surface_heights[0] as f64,
+                    context.estimated_surface_heights[1] as f64,
+                    context.estimated_surface_heights[2] as f64,
+                    context.estimated_surface_heights[3] as f64,
+                )
+                .floor() as i32;
+                context.surface_min_y = surface + context.run_depth - 8;
+            }
+            context.surface_min_y
+        }
         // TODO
-        context.block_pos.y >= 60
+        context.block_pos.y >= estimate_surface_height(context, surface_height_estimate_sampler)
     }
 }
 
@@ -249,7 +326,7 @@ impl StoneDepthMaterialCondition {
             0
         } else {
             pumpkin_util::math::map(
-                context.get_secoundary_depth(),
+                context.get_secondary_depth(),
                 -1.0,
                 1.0,
                 0.0,
@@ -304,10 +381,10 @@ impl VerticalGradientMaterialCondition {
         if block_y >= false_at as i32 {
             return false;
         }
-        let maped =
+        let mapped =
             pumpkin_util::math::map(block_y as f32, true_at as f32, false_at as f32, 1.0, 0.0);
         let mut random = splitter.split_pos(context.block_pos.x, block_y, context.block_pos.z);
-        random.next_f32() < maped
+        random.next_f32() < mapped
     }
 }
 
