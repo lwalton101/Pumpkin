@@ -1,0 +1,34 @@
+use crate::entity::player::Player;
+use async_trait::async_trait;
+use log::Level;
+use pumpkin_world::block::registry;
+use pumpkin_data::item::Item;
+use pumpkin_macros::pumpkin_block;
+use pumpkin_protocol::server::play::SUseItemOn;
+use pumpkin_util::math::position::BlockPos;
+use pumpkin_world::block::{BlockDirection, registry::Block};
+
+use crate::{
+    block::{properties::Direction, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
+    server::Server,
+    world::World,
+};
+use crate::block::blocks::vertical_attachment::VerticalAttachment;
+use crate::block::properties::face::Face;
+
+#[pumpkin_block("minecraft:wall_torch")]
+pub struct TorchBlock;
+
+#[async_trait]
+impl PumpkinBlock for TorchBlock {
+    async fn on_place(&self, server: &Server, world: &World, block: &Block, face: &BlockDirection, block_pos: &BlockPos, use_item_on: &SUseItemOn, player_direction: &Direction, other: bool) -> u16 {
+        VerticalAttachment::on_place(self,server,world,block,face,block_pos,use_item_on,player_direction,other).await
+    }
+}
+
+impl VerticalAttachment for TorchBlock{
+    fn get_standing_block(&self) -> &'static Block {
+        registry::get_block("minecraft:torch").unwrap()
+    }
+}
+
