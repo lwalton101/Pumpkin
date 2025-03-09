@@ -26,6 +26,7 @@ pub(crate) mod slab_type;
 pub(crate) mod stair_shape;
 pub(crate) mod unstable;
 pub(crate) mod waterlog;
+pub(crate) mod lit;
 
 use crate::world::World;
 

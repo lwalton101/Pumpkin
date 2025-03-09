@@ -33,6 +33,7 @@ use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::P
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
 use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
+use crate::block::properties::lit::Lit;
 
 mod blocks;
 pub mod properties;
@@ -131,6 +132,7 @@ pub fn default_block_properties_manager() -> Arc<BlockPropertiesManager> {
     manager.register(Up::False);
     manager.register(Waterlogged::False());
     manager.register(West::False);
+    manager.register(Lit::True());
 
     manager.build_properties_registry();
 
