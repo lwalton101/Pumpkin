@@ -1,7 +1,7 @@
 use log::Level;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{registry, BlockDirection};
+use pumpkin_world::block::{BlockDirection};
 use pumpkin_world::block::registry::Block;
 use crate::block::properties::Direction;
 use crate::block::pumpkin_block::PumpkinBlock;

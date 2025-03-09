@@ -1,20 +1,16 @@
-use crate::entity::player::Player;
 use async_trait::async_trait;
-use log::Level;
-use pumpkin_world::block::registry;
-use pumpkin_data::item::Item;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_world::block::{BlockDirection, registry::Block};
+use pumpkin_world::block::registry;
+use pumpkin_world::block::{registry::Block, BlockDirection};
 
-use crate::{
-    block::{properties::Direction, pumpkin_block::PumpkinBlock, registry::BlockActionResult},
-    server::Server,
-    world::World,
-};
 use crate::block::blocks::vertical_attachment::VerticalAttachment;
-use crate::block::properties::face::Face;
+use crate::{
+    block::{properties::Direction, pumpkin_block::PumpkinBlock},
+    server::Server,
+    world::World
+};
 
 #[pumpkin_block("minecraft:wall_torch")]
 pub struct TorchBlock;
