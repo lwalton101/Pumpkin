@@ -19,6 +19,7 @@ pub(crate) mod face;
 pub(crate) mod facing;
 pub(crate) mod half;
 pub(crate) mod layers;
+pub(crate) mod lit;
 pub(crate) mod open;
 pub(crate) mod powered;
 pub(crate) mod signal_fire;
@@ -26,7 +27,6 @@ pub(crate) mod slab_type;
 pub(crate) mod stair_shape;
 pub(crate) mod unstable;
 pub(crate) mod waterlog;
-pub(crate) mod lit;
 
 use crate::world::World;
 

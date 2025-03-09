@@ -26,14 +26,14 @@ use pumpkin_world::{
 };
 use rand::Rng;
 
+use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
+use crate::block::properties::lit::Lit;
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
-use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
-use crate::block::properties::lit::Lit;
 
 mod blocks;
 pub mod properties;
