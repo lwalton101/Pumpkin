@@ -11,7 +11,6 @@ use crate::world::World;
 pub trait VerticalAttachment: PumpkinBlock{
     fn get_standing_block(&self) -> &'static Block;
     async fn on_place(&self, server: &Server, world: &World, block: &Block, face: &BlockDirection, block_pos: &BlockPos, use_item_on: &SUseItemOn, player_direction: &Direction, other: bool) -> u16 {
-        log::log!(Level::Info, "Placed torch from attachment");
         match &face {
             BlockDirection::Bottom => {
                 self.get_standing_block().default_state_id
