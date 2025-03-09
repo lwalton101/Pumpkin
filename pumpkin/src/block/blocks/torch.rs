@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use log::Level;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -28,3 +29,18 @@ impl VerticalAttachment for TorchBlock{
     }
 }
 
+#[pumpkin_block("minecraft:redstone_wall_torch")]
+pub struct RedstoneTorchBlock;
+
+#[async_trait]
+impl PumpkinBlock for RedstoneTorchBlock {
+    async fn on_place(&self, server: &Server, world: &World, block: &Block, face: &BlockDirection, block_pos: &BlockPos, use_item_on: &SUseItemOn, player_direction: &Direction, other: bool) -> u16 {
+        VerticalAttachment::on_place(self,server,world,block,face,block_pos,use_item_on,player_direction,other).await
+    }
+}
+
+impl VerticalAttachment for RedstoneTorchBlock {
+    fn get_standing_block(&self) -> &'static Block {
+        registry::get_block("minecraft:redstone_torch").unwrap()
+    }
+}

@@ -32,7 +32,7 @@ use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
-use crate::block::blocks::torch::TorchBlock;
+use crate::block::blocks::torch::{RedstoneTorchBlock, TorchBlock};
 
 mod blocks;
 pub mod properties;
@@ -50,6 +50,7 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TNTBlock);
     manager.register(LeverBlock);
     manager.register(TorchBlock);
+    manager.register(RedstoneTorchBlock);
 
     Arc::new(manager)
 }
