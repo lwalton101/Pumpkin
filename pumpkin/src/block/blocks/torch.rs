@@ -3,12 +3,10 @@ use pumpkin_data::block::{Block, BlockProperties, HorizontalFacing, WallTorchLik
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
-use pumpkin_util::math::vector3::Vector3;
-use pumpkin_world::block::registry;
-use pumpkin_world::block::{BlockDirection};
+use pumpkin_world::block::BlockDirection;
 
 use crate::{
-    block::{pumpkin_block::PumpkinBlock},
+    block::pumpkin_block::PumpkinBlock,
     server::Server,
     world::World,
 };
