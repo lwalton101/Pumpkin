@@ -1,124 +1,36 @@
 use async_trait::async_trait;
+use pumpkin_data::block::{Block, BlockProperties, HorizontalFacing, WallTorchLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
+use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::block::registry;
-use pumpkin_world::block::{BlockDirection, registry::Block};
+use pumpkin_world::block::{BlockDirection};
 
-use crate::block::blocks::vertical_attachment::VerticalAttachment;
 use crate::{
-    block::{properties::Direction, pumpkin_block::PumpkinBlock},
+    block::{pumpkin_block::PumpkinBlock},
     server::Server,
     world::World,
 };
 
-#[pumpkin_block("minecraft:wall_torch")]
+#[pumpkin_block("minecraft:torch")]
 pub struct TorchBlock;
 
 #[async_trait]
 impl PumpkinBlock for TorchBlock {
-    async fn on_place(
-        &self,
-        server: &Server,
-        world: &World,
-        block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &Direction,
-        other: bool,
-    ) -> u16 {
-        VerticalAttachment::on_place(
-            self,
-            server,
-            world,
-            block,
-            face,
-            block_pos,
-            use_item_on,
-            player_direction,
-            other,
-        )
-        .await
-    }
-}
+    async fn on_place(&self, _server: &Server, _world: &World, block: &Block, _face: &BlockDirection, _block_pos: &BlockPos, _use_item_on: &SUseItemOn, _player_direction: &HorizontalFacing, _other: bool) -> u16 {
+        let standing_block = Block::WALL_TORCH;
+        let mut properties = WallTorchLikeProperties::default(&standing_block);
 
-impl VerticalAttachment for TorchBlock {
-    fn get_standing_block(&self) -> &'static Block {
-        registry::get_block("minecraft:torch").unwrap()
-    }
-}
+        match _face {
+            BlockDirection::North | BlockDirection::South | BlockDirection::West | BlockDirection::East => {
+                properties.facing = _face.to_cardinal_direction().opposite();
+                return properties.to_state_id(&standing_block);
+            }
+            _ => {}
+        }
 
-#[pumpkin_block("minecraft:redstone_wall_torch")]
-pub struct RedstoneTorchBlock;
 
-#[async_trait]
-impl PumpkinBlock for RedstoneTorchBlock {
-    async fn on_place(
-        &self,
-        server: &Server,
-        world: &World,
-        block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &Direction,
-        other: bool,
-    ) -> u16 {
-        VerticalAttachment::on_place(
-            self,
-            server,
-            world,
-            block,
-            face,
-            block_pos,
-            use_item_on,
-            player_direction,
-            other,
-        )
-        .await
-    }
-}
-
-impl VerticalAttachment for RedstoneTorchBlock {
-    fn get_standing_block(&self) -> &'static Block {
-        registry::get_block("minecraft:redstone_torch").unwrap()
-    }
-}
-
-#[pumpkin_block("minecraft:soul_wall_torch")]
-pub struct SoulTorchBlock;
-
-#[async_trait]
-impl PumpkinBlock for SoulTorchBlock {
-    async fn on_place(
-        &self,
-        server: &Server,
-        world: &World,
-        block: &Block,
-        face: &BlockDirection,
-        block_pos: &BlockPos,
-        use_item_on: &SUseItemOn,
-        player_direction: &Direction,
-        other: bool,
-    ) -> u16 {
-        VerticalAttachment::on_place(
-            self,
-            server,
-            world,
-            block,
-            face,
-            block_pos,
-            use_item_on,
-            player_direction,
-            other,
-        )
-        .await
-    }
-}
-
-impl VerticalAttachment for SoulTorchBlock {
-    fn get_standing_block(&self) -> &'static Block {
-        registry::get_block("minecraft:soul_torch").unwrap()
+        block.default_state_id
     }
 }
