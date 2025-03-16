@@ -49,10 +49,10 @@ impl PumpkinBlock for TorchBlock {
                     }
                 }
 
-                return if possible_directions.contains(&_player_direction) {
+                return if possible_directions.contains(_player_direction) {
                     wall_block_properties.facing = _player_direction.opposite();
                     wall_block_properties.to_state_id(&wall_block)
-                } else if possible_directions.len() > 0 {
+                } else if possible_directions.is_empty() {
                     wall_block_properties.facing = possible_directions[0].opposite();
                     wall_block_properties.to_state_id(&wall_block)
                 } else {
@@ -99,10 +99,10 @@ impl PumpkinBlock for RedstoneTorchBlock {
                     }
                 }
 
-                return if possible_directions.contains(&_player_direction) {
+                return if possible_directions.contains(_player_direction) {
                     wall_block_properties.facing = _player_direction.opposite();
                     wall_block_properties.to_state_id(&wall_block)
-                } else if possible_directions.len() > 0 {
+                } else if possible_directions.is_empty() {
                     wall_block_properties.facing = possible_directions[0].opposite();
                     wall_block_properties.to_state_id(&wall_block)
                 } else {
@@ -150,10 +150,10 @@ impl PumpkinBlock for SoulTorchBlock {
                     }
                 }
 
-                return if possible_directions.contains(&_player_direction) {
+                return if possible_directions.contains(_player_direction) {
                     wall_block_properties.facing = _player_direction.opposite();
                     wall_block_properties.to_state_id(&wall_block)
-                } else if possible_directions.len() > 0 {
+                } else if possible_directions.is_empty() {
                     wall_block_properties.facing = possible_directions[0].opposite();
                     wall_block_properties.to_state_id(&wall_block)
                 } else {
