@@ -14,13 +14,13 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
+use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
-use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
 
 mod blocks;
 pub mod pumpkin_block;
