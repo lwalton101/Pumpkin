@@ -59,7 +59,7 @@ impl PumpkinBlock for TorchBlock {
                     0
                 };
             }
-            _ => {}
+            BlockDirection::Down => {}
         }
 
         block.default_state_id
@@ -109,7 +109,7 @@ impl PumpkinBlock for RedstoneTorchBlock {
                     0
                 };
             }
-            _ => {}
+            BlockDirection::Down => {}
         }
 
         block.default_state_id
@@ -160,7 +160,7 @@ impl PumpkinBlock for SoulTorchBlock {
                     0
                 };
             }
-            _ => {}
+            BlockDirection::Down => {}
         }
 
         block.default_state_id
