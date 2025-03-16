@@ -1,8 +1,5 @@
 use async_trait::async_trait;
-use log::info;
-use pumpkin_data::block::{Block, BlockFace, BlockProperties, FurnaceLikeProperties, HorizontalFacing, WallTorchLikeProperties};
-use pumpkin_data::block::BlockFace::Wall;
-use pumpkin_data::screen::WindowType::Furnace;
+use pumpkin_data::block::{Block, BlockProperties, FurnaceLikeProperties, HorizontalFacing, WallTorchLikeProperties};
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
