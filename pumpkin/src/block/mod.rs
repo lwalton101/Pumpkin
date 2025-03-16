@@ -20,7 +20,7 @@ use crate::world::World;
 use crate::{block::blocks::crafting_table::CraftingTableBlock, entity::player::Player};
 use crate::{block::blocks::jukebox::JukeboxBlock, entity::experience_orb::ExperienceOrbEntity};
 use std::sync::Arc;
-use crate::block::blocks::torch::TorchBlock;
+use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
 
 mod blocks;
 pub mod pumpkin_block;
@@ -37,6 +37,8 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(TNTBlock);
     manager.register(LeverBlock);
     manager.register(TorchBlock);
+    manager.register(RedstoneTorchBlock);
+    manager.register(SoulTorchBlock);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
