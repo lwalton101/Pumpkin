@@ -14,6 +14,7 @@ use pumpkin_util::math::vector3::Vector3;
 use pumpkin_world::item::ItemStack;
 use rand::Rng;
 
+use crate::block::blocks::torch::{RedstoneTorchBlock, SoulTorchBlock, TorchBlock};
 use crate::block::registry::BlockRegistry;
 use crate::entity::item::ItemEntity;
 use crate::world::World;
@@ -35,6 +36,9 @@ pub fn default_registry() -> Arc<BlockRegistry> {
     manager.register(ChestBlock);
     manager.register(TNTBlock);
     manager.register(LeverBlock);
+    manager.register(TorchBlock);
+    manager.register(RedstoneTorchBlock);
+    manager.register(SoulTorchBlock);
 
     register_door_blocks(&mut manager);
     register_fence_blocks(&mut manager);
