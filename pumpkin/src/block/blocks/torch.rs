@@ -30,7 +30,9 @@ impl PumpkinBlock for TorchBlock {
         player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        if face == &BlockDirection::Down { block.default_state_id } else {
+        if face == &BlockDirection::Down {
+            block.default_state_id
+        } else {
             let props = get_wall_block_props(
                 world,
                 block,
@@ -59,7 +61,9 @@ impl PumpkinBlock for RedstoneTorchBlock {
         player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        if face == &BlockDirection::Down { block.default_state_id } else {
+        if face == &BlockDirection::Down {
+            block.default_state_id
+        } else {
             let props = get_wall_block_props(
                 world,
                 block,
@@ -88,7 +92,9 @@ impl PumpkinBlock for SoulTorchBlock {
         player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        if face == &BlockDirection::Down { block.default_state_id } else {
+        if face == &BlockDirection::Down {
+            block.default_state_id
+        } else {
             let props = get_wall_block_props(
                 world,
                 block,
