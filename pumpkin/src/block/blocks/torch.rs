@@ -1,7 +1,7 @@
 use async_trait::async_trait;
-use pumpkin_data::block::{
-    Block, BlockProperties, FurnaceLikeProperties, HorizontalFacing, WallTorchLikeProperties,
-};
+use log::error;
+use pumpkin_data::block::{Block, BlockProperties, EnumVariants, FurnaceLikeProperties, HorizontalFacing, WallTorchLikeProperties};
+use pumpkin_data::block::BlockFace::Wall;
 use pumpkin_macros::pumpkin_block;
 use pumpkin_protocol::server::play::SUseItemOn;
 use pumpkin_util::math::position::BlockPos;
@@ -20,99 +20,48 @@ impl PumpkinBlock for TorchBlock {
     async fn on_place(
         &self,
         _server: &Server,
-        _world: &World,
+        world: &World,
         block: &Block,
-        _face: &BlockDirection,
-        _block_pos: &BlockPos,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        let wall_block = Block::WALL_TORCH;
-        let mut wall_block_properties = WallTorchLikeProperties::default(&wall_block);
-        match _face {
-            BlockDirection::North
-            | BlockDirection::South
-            | BlockDirection::West
-            | BlockDirection::East => {
-                wall_block_properties.facing = _face.to_cardinal_direction().opposite();
-                return wall_block_properties.to_state_id(&wall_block);
+        match face {
+            BlockDirection::Down => {
+                block.default_state_id
             }
-            BlockDirection::Up => {
-                let mut possible_directions = vec![];
-                for bd in BlockDirection::horizontal() {
-                    let block_offset = bd.to_offset();
-                    let base_block_pos = _block_pos.offset(block_offset);
-                    let base_block = _world.get_block(&base_block_pos).await.unwrap();
-                    if base_block.id != 0 {
-                        possible_directions.push(bd.to_cardinal_direction());
-                    }
-                }
-
-                return if possible_directions.contains(_player_direction) {
-                    wall_block_properties.facing = _player_direction.opposite();
-                    wall_block_properties.to_state_id(&wall_block)
-                } else if possible_directions.is_empty() {
-                    wall_block_properties.facing = possible_directions[0].opposite();
-                    wall_block_properties.to_state_id(&wall_block)
-                } else {
-                    0
-                };
+            _ => {
+                let props = get_wall_block_props(world, block, block_pos, face, player_direction, WallTorchLikeProperties::default(&Block::WALL_TORCH).to_props()).await;
+                WallTorchLikeProperties::from_props(props, &Block::WALL_TORCH).to_state_id(&Block::WALL_TORCH)
             }
-            BlockDirection::Down => {}
         }
-
-        block.default_state_id
     }
 }
+
 #[async_trait]
 impl PumpkinBlock for RedstoneTorchBlock {
     async fn on_place(
         &self,
         _server: &Server,
-        _world: &World,
+        world: &World,
         block: &Block,
-        _face: &BlockDirection,
-        _block_pos: &BlockPos,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        let wall_block = Block::REDSTONE_WALL_TORCH;
-        let mut wall_block_properties = FurnaceLikeProperties::default(&wall_block);
-        match _face {
-            BlockDirection::North
-            | BlockDirection::South
-            | BlockDirection::West
-            | BlockDirection::East => {
-                wall_block_properties.facing = _face.to_cardinal_direction().opposite();
-                return wall_block_properties.to_state_id(&wall_block);
+        match face {
+            BlockDirection::Down => {
+                block.default_state_id
             }
-            BlockDirection::Up => {
-                let mut possible_directions = vec![];
-                for bd in BlockDirection::horizontal() {
-                    let block_offset = bd.to_offset();
-                    let base_block_pos = _block_pos.offset(block_offset);
-                    let base_block = _world.get_block(&base_block_pos).await.unwrap();
-                    if base_block.id != 0 {
-                        possible_directions.push(bd.to_cardinal_direction());
-                    }
-                }
-
-                return if possible_directions.contains(_player_direction) {
-                    wall_block_properties.facing = _player_direction.opposite();
-                    wall_block_properties.to_state_id(&wall_block)
-                } else if possible_directions.is_empty() {
-                    wall_block_properties.facing = possible_directions[0].opposite();
-                    wall_block_properties.to_state_id(&wall_block)
-                } else {
-                    0
-                };
+            _ => {
+                let props = get_wall_block_props(world, block, block_pos, face, player_direction, FurnaceLikeProperties::default(&Block::REDSTONE_WALL_TORCH).to_props()).await;
+                FurnaceLikeProperties::from_props(props, &Block::REDSTONE_WALL_TORCH).to_state_id(&Block::REDSTONE_WALL_TORCH)
             }
-            BlockDirection::Down => {}
         }
-
-        block.default_state_id
     }
 }
 
@@ -121,48 +70,67 @@ impl PumpkinBlock for SoulTorchBlock {
     async fn on_place(
         &self,
         _server: &Server,
-        _world: &World,
+        world: &World,
         block: &Block,
-        _face: &BlockDirection,
-        _block_pos: &BlockPos,
+        face: &BlockDirection,
+        block_pos: &BlockPos,
         _use_item_on: &SUseItemOn,
-        _player_direction: &HorizontalFacing,
+        player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        let wall_block = Block::SOUL_WALL_TORCH;
-        let mut wall_block_properties = WallTorchLikeProperties::default(&wall_block);
-        match _face {
-            BlockDirection::North
-            | BlockDirection::South
-            | BlockDirection::West
-            | BlockDirection::East => {
-                wall_block_properties.facing = _face.to_cardinal_direction().opposite();
-                return wall_block_properties.to_state_id(&wall_block);
+        match face {
+            BlockDirection::Down => {
+                block.default_state_id
             }
-            BlockDirection::Up => {
-                let mut possible_directions = vec![];
-                for bd in BlockDirection::horizontal() {
-                    let block_offset = bd.to_offset();
-                    let base_block_pos = _block_pos.offset(block_offset);
-                    let base_block = _world.get_block(&base_block_pos).await.unwrap();
-                    if base_block.id != 0 {
-                        possible_directions.push(bd.to_cardinal_direction());
-                    }
-                }
-
-                return if possible_directions.contains(_player_direction) {
-                    wall_block_properties.facing = _player_direction.opposite();
-                    wall_block_properties.to_state_id(&wall_block)
-                } else if possible_directions.is_empty() {
-                    wall_block_properties.facing = possible_directions[0].opposite();
-                    wall_block_properties.to_state_id(&wall_block)
-                } else {
-                    0
-                };
+            _ => {
+                let props = get_wall_block_props(world, block, block_pos, face, player_direction, WallTorchLikeProperties::default(&Block::SOUL_WALL_TORCH).to_props()).await;
+                WallTorchLikeProperties::from_props(props, &Block::SOUL_WALL_TORCH).to_state_id(&Block::SOUL_WALL_TORCH)
             }
-            BlockDirection::Down => {}
         }
-
-        block.default_state_id
     }
+}
+async fn get_wall_block_props(world: &World, block: &Block, block_pos: &BlockPos, _face: &BlockDirection, player_direction:&HorizontalFacing, mut block_properties: Vec<(String, String)>) -> Vec<(String, String)> {
+
+    let contains_facing = block_properties.iter().any(|(key, _)| key == "facing");
+
+    if !contains_facing{
+        error!("Cannot find facing property in block {}", block.name);
+        return Block::AIR.properties(Block::AIR.default_state_id).unwrap().to_props()
+    }
+
+    let facing_index = block_properties.iter().position(|(key, _)| key == "facing").unwrap();
+
+    match _face {
+        BlockDirection::North
+        | BlockDirection::South
+        | BlockDirection::West
+        | BlockDirection::East => {
+            block_properties[facing_index].1 = _face.to_cardinal_direction().opposite().to_value().to_string();
+            return block_properties;
+        }
+        BlockDirection::Up => {
+            let mut possible_directions = vec![];
+            for bd in BlockDirection::horizontal() {
+                let block_offset = bd.to_offset();
+                let base_block_pos = block_pos.offset(block_offset);
+                let base_block = world.get_block(&base_block_pos).await.unwrap();
+                if base_block.id != 0 {
+                    possible_directions.push(bd.to_cardinal_direction());
+                }
+            }
+
+            return if possible_directions.contains(player_direction) {
+                block_properties[facing_index].1 = player_direction.opposite().to_value().to_string();
+                block_properties
+            } else if possible_directions.is_empty() {
+                block_properties[facing_index].1 = possible_directions[0].opposite().to_value().to_string();
+                block_properties
+            } else {
+                Block::AIR.properties(Block::AIR.default_state_id).unwrap().to_props()
+            };
+        }
+        BlockDirection::Down => {}
+    }
+
+    block_properties
 }
