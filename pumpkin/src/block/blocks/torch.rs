@@ -1,6 +1,5 @@
 use async_trait::async_trait;
 use log::error;
-use pumpkin_data::block::BlockFace::Wall;
 use pumpkin_data::block::{
     Block, BlockProperties, EnumVariants, FurnaceLikeProperties, HorizontalFacing,
     WallTorchLikeProperties,
@@ -31,21 +30,18 @@ impl PumpkinBlock for TorchBlock {
         player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        match face {
-            BlockDirection::Down => block.default_state_id,
-            _ => {
-                let props = get_wall_block_props(
-                    world,
-                    block,
-                    block_pos,
-                    face,
-                    player_direction,
-                    WallTorchLikeProperties::default(&Block::WALL_TORCH).to_props(),
-                )
-                .await;
-                WallTorchLikeProperties::from_props(props, &Block::WALL_TORCH)
-                    .to_state_id(&Block::WALL_TORCH)
-            }
+        if face == &BlockDirection::Down { block.default_state_id } else {
+            let props = get_wall_block_props(
+                world,
+                block,
+                block_pos,
+                face,
+                player_direction,
+                WallTorchLikeProperties::default(&Block::WALL_TORCH).to_props(),
+            )
+            .await;
+            WallTorchLikeProperties::from_props(props, &Block::WALL_TORCH)
+                .to_state_id(&Block::WALL_TORCH)
         }
     }
 }
@@ -63,21 +59,18 @@ impl PumpkinBlock for RedstoneTorchBlock {
         player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        match face {
-            BlockDirection::Down => block.default_state_id,
-            _ => {
-                let props = get_wall_block_props(
-                    world,
-                    block,
-                    block_pos,
-                    face,
-                    player_direction,
-                    FurnaceLikeProperties::default(&Block::REDSTONE_WALL_TORCH).to_props(),
-                )
-                .await;
-                FurnaceLikeProperties::from_props(props, &Block::REDSTONE_WALL_TORCH)
-                    .to_state_id(&Block::REDSTONE_WALL_TORCH)
-            }
+        if face == &BlockDirection::Down { block.default_state_id } else {
+            let props = get_wall_block_props(
+                world,
+                block,
+                block_pos,
+                face,
+                player_direction,
+                FurnaceLikeProperties::default(&Block::REDSTONE_WALL_TORCH).to_props(),
+            )
+            .await;
+            FurnaceLikeProperties::from_props(props, &Block::REDSTONE_WALL_TORCH)
+                .to_state_id(&Block::REDSTONE_WALL_TORCH)
         }
     }
 }
@@ -95,21 +88,18 @@ impl PumpkinBlock for SoulTorchBlock {
         player_direction: &HorizontalFacing,
         _other: bool,
     ) -> u16 {
-        match face {
-            BlockDirection::Down => block.default_state_id,
-            _ => {
-                let props = get_wall_block_props(
-                    world,
-                    block,
-                    block_pos,
-                    face,
-                    player_direction,
-                    WallTorchLikeProperties::default(&Block::SOUL_WALL_TORCH).to_props(),
-                )
-                .await;
-                WallTorchLikeProperties::from_props(props, &Block::SOUL_WALL_TORCH)
-                    .to_state_id(&Block::SOUL_WALL_TORCH)
-            }
+        if face == &BlockDirection::Down { block.default_state_id } else {
+            let props = get_wall_block_props(
+                world,
+                block,
+                block_pos,
+                face,
+                player_direction,
+                WallTorchLikeProperties::default(&Block::SOUL_WALL_TORCH).to_props(),
+            )
+            .await;
+            WallTorchLikeProperties::from_props(props, &Block::SOUL_WALL_TORCH)
+                .to_state_id(&Block::SOUL_WALL_TORCH)
         }
     }
 }
@@ -117,7 +107,7 @@ async fn get_wall_block_props(
     world: &World,
     block: &Block,
     block_pos: &BlockPos,
-    _face: &BlockDirection,
+    face: &BlockDirection,
     player_direction: &HorizontalFacing,
     mut block_properties: Vec<(String, String)>,
 ) -> Vec<(String, String)> {
@@ -136,12 +126,12 @@ async fn get_wall_block_props(
         .position(|(key, _)| key == "facing")
         .unwrap();
 
-    match _face {
+    match face {
         BlockDirection::North
         | BlockDirection::South
         | BlockDirection::West
         | BlockDirection::East => {
-            block_properties[facing_index].1 = _face
+            block_properties[facing_index].1 = face
                 .to_cardinal_direction()
                 .opposite()
                 .to_value()
