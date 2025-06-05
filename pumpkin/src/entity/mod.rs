@@ -37,7 +37,9 @@ use std::sync::{
     },
 };
 use tokio::sync::{Mutex, RwLock};
-
+use pumpkin_data::fluid::{FlowingWaterLikeFluidProperties, Fluid, FluidProperties};
+use pumpkin_world::world::GetBlockError;
+use crate::error::PumpkinError;
 use crate::world::World;
 
 pub mod ai;
@@ -123,6 +125,8 @@ pub struct Entity {
     pub sneaking: AtomicBool,
     /// Indicates whether the entity is sprinting
     pub sprinting: AtomicBool,
+    /// Indicates whether the entity is swimming
+    pub swimming: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -183,6 +187,7 @@ impl Entity {
             sneaking: AtomicBool::new(false),
             world: Arc::new(RwLock::new(world)),
             sprinting: AtomicBool::new(false),
+            swimming: AtomicBool::new(false),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
             head_yaw: AtomicCell::new(0.0),
@@ -685,6 +690,29 @@ impl Entity {
             ))
             .await;
     }
+
+    pub async fn check_water_state(&self){
+        //TODO: check if in boat
+
+        let player_foot_position = self.pos.load().to_f64();
+        let player_foot_block_pos = BlockPos::floored(player_foot_position.x, player_foot_position.y, player_foot_position.z);
+        let world = self.world.read().await;
+        let result = world.get_fluid(&player_foot_block_pos).await;
+        match result {
+            Ok(fluid) => {
+                if fluid.id != 1{
+                    return;
+                }
+                let block_state_id = world.get_block_state_id(&player_foot_block_pos).await;
+                let properties = FlowingWaterLikeFluidProperties::from_state_id(block_state_id, &fluid);
+                log::info!("Got a fluid with level: {0}, {1:?}", fluid.name, properties.level);
+            }
+            Err(err) => {
+                log::warn!("Invalid Block ID at {}", player_foot_block_pos);
+            }
+        }
+    }
+
 }
 
 #[async_trait]
@@ -712,6 +740,8 @@ impl EntityBase for Entity {
         }
         self.set_on_fire(self.fire_ticks.load(Ordering::Relaxed) > 0)
             .await;
+
+        self.check_water_state().await;
         // TODO: Tick
     }
 
