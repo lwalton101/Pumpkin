@@ -770,19 +770,6 @@ impl Player {
         self.living_entity.entity.pos.load()
     }
 
-    pub fn eye_position(&self) -> Vector3<f64> {
-        let eye_height = if self.living_entity.entity.pose.load() == EntityPose::Crouching {
-            1.27
-        } else {
-            f64::from(self.living_entity.entity.standing_eye_height)
-        };
-        Vector3::new(
-            self.living_entity.entity.pos.load().x,
-            self.living_entity.entity.pos.load().y + eye_height,
-            self.living_entity.entity.pos.load().z,
-        )
-    }
-
     pub fn rotation(&self) -> (f32, f32) {
         (
             self.living_entity.entity.yaw.load(),

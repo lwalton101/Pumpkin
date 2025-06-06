@@ -36,8 +36,10 @@ use std::sync::{
         Ordering::{self, Relaxed},
     },
 };
+use std::sync::atomic::Ordering::Release;
+use log::info;
 use tokio::sync::{Mutex, RwLock};
-use pumpkin_data::fluid::{FlowingWaterLikeFluidProperties, Fluid, FluidProperties};
+use pumpkin_data::fluid::{EnumVariants, FlowingWaterLikeFluidProperties, Fluid, FluidProperties};
 use pumpkin_world::world::GetBlockError;
 use crate::error::PumpkinError;
 use crate::world::World;
@@ -127,6 +129,10 @@ pub struct Entity {
     pub sprinting: AtomicBool,
     /// Indicates whether the entity is swimming
     pub swimming: AtomicBool,
+    /// Indicates whether the entity is touching water
+    pub touching_water: AtomicBool,
+    /// Indicates whether the entity is submerged in water
+    pub submerged_in_water: AtomicBool,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -675,6 +681,7 @@ impl Entity {
         pitch: Option<f32>,
         _world: Arc<World>,
     ) {
+        dbg!("aa");
         // TODO: handle world change
         self.world
             .read()
@@ -690,26 +697,59 @@ impl Entity {
             .await;
     }
 
+    pub fn eye_position(&self) -> Vector3<f64> {
+        let eye_height = if self.pose.load() == EntityPose::Crouching {
+            1.27
+        } else {
+            f64::from(self.standing_eye_height)
+        };
+        Vector3::new(
+            self.pos.load().x,
+            self.pos.load().y + eye_height,
+            self.pos.load().z,
+        )
+    }
+
     pub async fn check_water_state(&self){
         //TODO: check if in boat
-
-        let player_foot_position = self.pos.load().to_f64();
-        let player_foot_block_pos = BlockPos::floored(player_foot_position.x, player_foot_position.y, player_foot_position.z);
         let world = self.world.read().await;
-        let result = world.get_fluid(&player_foot_block_pos).await;
-        match result {
-            Ok(fluid) => {
-                if fluid.id != 1{
-                    return;
+        let min_bounding_box = self.bounding_box.load().min.to_i32();
+        let max_bounding_box = self.bounding_box.load().max.to_i32();
+        let mut touching_water = false;
+        let mut submerged = false;
+        for x in min_bounding_box.x..max_bounding_box.x {
+            for y in min_bounding_box.y..max_bounding_box.y {
+                for z in min_bounding_box.z..max_bounding_box.z {
+                    let block_pos = BlockPos::new(x, y, z);
+                    let result = world.get_fluid(&block_pos).await;
+
+                    match result {
+                        Ok(fluid) => {
+                            if fluid.id == 1 {
+                                let block_state_id = world.get_block_state_id(&block_pos).await;
+                                let properties = FlowingWaterLikeFluidProperties::from_state_id(block_state_id, &fluid);
+                                let level = properties.level;
+                                let height = (level.to_index() as f64 + 1f64) / 9f64;
+                                //info!("touching water at {}", block_pos);
+                                touching_water = true;
+                                if (block_pos.0.y as f64 + height) > self.eye_position().y{
+                                    submerged = true;
+                                }
+                            }
+                        }
+                        Err(err) => {
+                            //log::warn!("Invalid Block ID at {}", player_foot_block_pos);
+                        }
+                    }
                 }
-                let block_state_id = world.get_block_state_id(&player_foot_block_pos).await;
-                let properties = FlowingWaterLikeFluidProperties::from_state_id(block_state_id, &fluid);
-                log::info!("Got a fluid with level: {0}, {1:?}", fluid.name, properties.level);
-            }
-            Err(err) => {
-                log::warn!("Invalid Block ID at {}", player_foot_block_pos);
             }
         }
+        self.touching_water.store(touching_water, Release);
+        self.submerged_in_water.store(submerged, Release);
+    }
+
+    pub fn update_swimming(){
+
     }
 
 }
@@ -741,6 +781,7 @@ impl EntityBase for Entity {
             .await;
 
         self.check_water_state().await;
+        self.update_swimming();
         // TODO: Tick
     }
 
