@@ -36,6 +36,7 @@ use std::sync::{
         Ordering::{self, Relaxed},
     },
 };
+use std::sync::atomic::AtomicI16;
 use std::sync::atomic::Ordering::Release;
 use log::info;
 use tokio::sync::{Mutex, RwLock};
@@ -133,6 +134,8 @@ pub struct Entity {
     pub touching_water: AtomicBool,
     /// Indicates whether the entity is submerged in water
     pub submerged_in_water: AtomicBool,
+    /// Indicates how much air the player has left (negative values means drowning) (-20 means taking damage)
+    pub air: AtomicI16,
     /// Indicates whether the entity is flying due to a fall
     pub fall_flying: AtomicBool,
     /// The entity's current velocity vector, aka knockback
@@ -194,8 +197,9 @@ impl Entity {
             world: Arc::new(RwLock::new(world)),
             sprinting: AtomicBool::new(false),
             swimming: AtomicBool::new(false),
-            touching_water: AtomicBool::new(true),
-            submerged_in_water: AtomicBool::new(true),
+            touching_water: AtomicBool::new(false),
+            submerged_in_water: AtomicBool::new(false),
+            air: AtomicI16::new(300),
             fall_flying: AtomicBool::new(false),
             yaw: AtomicCell::new(0.0),
             head_yaw: AtomicCell::new(0.0),
