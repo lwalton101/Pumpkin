@@ -290,7 +290,7 @@ impl LivingEntity {
         }
     }
 
-    pub async fn update_air(&self){
+    pub async fn update_air(&self) {
         let mut air_remaining = self.entity.air.load(Relaxed);
 
         if air_remaining == -20 {
@@ -302,7 +302,12 @@ impl LivingEntity {
             air_remaining += 1;
         }
         self.entity.air.store(air_remaining, Relaxed);
-        self.entity.send_meta_data(&[Metadata::new(1, MetaDataType::Integer, VarInt(air_remaining as i32))])
+        self.entity
+            .send_meta_data(&[Metadata::new(
+                1,
+                MetaDataType::Integer,
+                VarInt(air_remaining as i32),
+            )])
             .await;
     }
 }

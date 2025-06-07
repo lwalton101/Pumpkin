@@ -1,10 +1,14 @@
+use crate::error::PumpkinError;
+use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
 use bytes::BufMut;
 use core::f32;
 use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
+use log::info;
 use player::Player;
+use pumpkin_data::fluid::{EnumVariants, FlowingWaterLikeFluidProperties, Fluid, FluidProperties};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
@@ -28,7 +32,10 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
+use pumpkin_world::world::GetBlockError;
 use serde::Serialize;
+use std::sync::atomic::AtomicI16;
+use std::sync::atomic::Ordering::Release;
 use std::sync::{
     Arc,
     atomic::{
@@ -36,14 +43,7 @@ use std::sync::{
         Ordering::{self, Relaxed},
     },
 };
-use std::sync::atomic::AtomicI16;
-use std::sync::atomic::Ordering::Release;
-use log::info;
 use tokio::sync::{Mutex, RwLock};
-use pumpkin_data::fluid::{EnumVariants, FlowingWaterLikeFluidProperties, Fluid, FluidProperties};
-use pumpkin_world::world::GetBlockError;
-use crate::error::PumpkinError;
-use crate::world::World;
 
 pub mod ai;
 pub mod effect;
@@ -706,10 +706,9 @@ impl Entity {
     pub fn eye_position(&self) -> Vector3<f64> {
         let eye_height = if self.pose.load() == EntityPose::Crouching {
             1.27
-        }else if self.pose.load() == EntityPose::Swimming {
+        } else if self.pose.load() == EntityPose::Swimming {
             0.5
-        }
-        else {
+        } else {
             f64::from(self.standing_eye_height)
         };
         Vector3::new(
@@ -719,7 +718,7 @@ impl Entity {
         )
     }
 
-    pub async fn check_water_state(&self){
+    pub async fn check_water_state(&self) {
         //TODO: check if in boat
         let world = self.world.read().await;
         let min_bounding_box = self.bounding_box.load().min.to_i32();
@@ -729,7 +728,7 @@ impl Entity {
         //Scan over player bounding box
         for x in min_bounding_box.x..max_bounding_box.x + 1 {
             for y in min_bounding_box.y..max_bounding_box.y + 1 {
-                for z in min_bounding_box.z..max_bounding_box.z + 1{
+                for z in min_bounding_box.z..max_bounding_box.z + 1 {
                     let block_pos = BlockPos::new(x, y, z);
                     let result = world.get_fluid(&block_pos).await;
                     match result {
@@ -737,17 +736,20 @@ impl Entity {
                             info!("Found fluid {} at {}", fluid.name, block_pos);
                             if fluid.id == 1 {
                                 let block_state_id = world.get_block_state_id(&block_pos).await;
-                                let properties = FlowingWaterLikeFluidProperties::from_state_id(block_state_id, &fluid);
+                                let properties = FlowingWaterLikeFluidProperties::from_state_id(
+                                    block_state_id,
+                                    &fluid,
+                                );
                                 let level = properties.level;
                                 let height = (level.to_index() as f64 + 1f64) / 9f64;
 
                                 touching_water = true;
-                                if (block_pos.0.y as f64 + height) > self.eye_position().y{
+                                if (block_pos.0.y as f64 + height) > self.eye_position().y {
                                     submerged = true;
                                 }
                             }
                         }
-                        Err(err) => {
+                        Err(_err) => {
                             //This only occurs when the players eyes are inside a block that isnt a fluid or air
                             //log::warn!("Invalid Block ID at {:?}", block_pos);
                         }
@@ -759,7 +761,7 @@ impl Entity {
         self.submerged_in_water.store(submerged, Relaxed);
     }
 
-    pub async fn update_swimming(&self){
+    pub async fn update_swimming(&self) {
         let swimming = self.swimming.load(Relaxed);
         let sprinting = self.sprinting.load(Relaxed);
         let touching_water = self.touching_water.load(Relaxed);
@@ -767,16 +769,15 @@ impl Entity {
         if swimming {
             let val = sprinting && touching_water;
             self.swimming.store(sprinting && touching_water, Relaxed);
-            if(!val){
+            if (!val) {
                 self.set_pose(EntityPose::Standing).await;
             }
         } else {
             let val = sprinting && touching_water && submerged_in_water;
             self.swimming.store(val, Relaxed);
-            if(val){
+            if (val) {
                 self.set_pose(EntityPose::Swimming).await;
             }
-
         }
     }
 }
