@@ -306,7 +306,7 @@ impl LivingEntity {
             .send_meta_data(&[Metadata::new(
                 1,
                 MetaDataType::Integer,
-                VarInt(air_remaining as i32),
+                VarInt(i32::from(air_remaining)),
             )])
             .await;
     }

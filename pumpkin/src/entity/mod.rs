@@ -723,9 +723,9 @@ impl Entity {
         let mut touching_water = false;
         let mut submerged = false;
         //Scan over player bounding box
-        for x in min_bounding_box.x..max_bounding_box.x + 1 {
-            for y in min_bounding_box.y..max_bounding_box.y + 1 {
-                for z in min_bounding_box.z..max_bounding_box.z + 1 {
+        for x in min_bounding_box.x..=max_bounding_box.x {
+            for y in min_bounding_box.y..=max_bounding_box.y {
+                for z in min_bounding_box.z..=max_bounding_box.z {
                     let block_pos = BlockPos::new(x, y, z);
                     let result = world.get_fluid(&block_pos).await;
                     match result {
@@ -738,10 +738,10 @@ impl Entity {
                                     &fluid,
                                 );
                                 let level = properties.level;
-                                let height = (level.to_index() as f64 + 1f64) / 9f64;
+                                let height = (f64::from(level.to_index()) + 1f64) / 9f64;
 
                                 touching_water = true;
-                                if (block_pos.0.y as f64 + height) > self.eye_position().y {
+                                if (f64::from(block_pos.0.y) + height) > self.eye_position().y {
                                     submerged = true;
                                 }
                             }
