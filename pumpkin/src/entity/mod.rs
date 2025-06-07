@@ -726,21 +726,21 @@ impl Entity {
         let max_bounding_box = self.bounding_box.load().max.to_i32();
         let mut touching_water = false;
         let mut submerged = false;
+        //Scan over player bounding box
         for x in min_bounding_box.x..max_bounding_box.x + 1 {
             for y in min_bounding_box.y..max_bounding_box.y + 1 {
                 for z in min_bounding_box.z..max_bounding_box.z + 1{
                     let block_pos = BlockPos::new(x, y, z);
                     let result = world.get_fluid(&block_pos).await;
-                    //info!("Checking {:?}", block_pos);
                     match result {
                         Ok(fluid) => {
-                            //info!("Found fluid {}", fluid.name);
+                            info!("Found fluid {} at {}", fluid.name, block_pos);
                             if fluid.id == 1 {
                                 let block_state_id = world.get_block_state_id(&block_pos).await;
                                 let properties = FlowingWaterLikeFluidProperties::from_state_id(block_state_id, &fluid);
                                 let level = properties.level;
                                 let height = (level.to_index() as f64 + 1f64) / 9f64;
-                                //info!("touching water at {:?}", block_pos);
+
                                 touching_water = true;
                                 if (block_pos.0.y as f64 + height) > self.eye_position().y{
                                     submerged = true;
@@ -748,17 +748,15 @@ impl Entity {
                             }
                         }
                         Err(err) => {
+                            //This only occurs when the players eyes are inside a block that isnt a fluid or air
                             //log::warn!("Invalid Block ID at {:?}", block_pos);
                         }
                     }
                 }
             }
         }
-        if !touching_water {
-            info!("Player not touching water between {:?} and {:?}", min_bounding_box, max_bounding_box);
-        }
-        self.touching_water.store(touching_water, Release);
-        self.submerged_in_water.store(submerged, Release);
+        self.touching_water.store(touching_water, Relaxed);
+        self.submerged_in_water.store(submerged, Relaxed);
     }
 
     pub async fn update_swimming(&self){
@@ -771,14 +769,12 @@ impl Entity {
             self.swimming.store(sprinting && touching_water, Relaxed);
             if(!val){
                 self.set_pose(EntityPose::Standing).await;
-                info!("stop swimming sprinting: {}, touching_water: {}", sprinting, touching_water);
             }
         } else {
             let val = sprinting && touching_water && submerged_in_water;
             self.swimming.store(val, Relaxed);
             if(val){
                 self.set_pose(EntityPose::Swimming).await;
-                info!("start swimming sprinting: {}, touching_water: {}, submerged: {}", sprinting, touching_water,submerged_in_water);
             }
 
         }
