@@ -41,7 +41,7 @@ use pumpkin_config::{BASIC_CONFIG, advanced_config};
 use pumpkin_data::{
     BlockState,
     damage::DamageType,
-    entity::{EffectType, EntityPose, EntityStatus, EntityType},
+    entity::{EffectType, EntityStatus, EntityType},
     item::Operation,
     particle::Particle,
     sound::{Sound, SoundCategory},

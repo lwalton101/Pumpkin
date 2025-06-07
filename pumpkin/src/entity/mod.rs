@@ -1,4 +1,3 @@
-use crate::error::PumpkinError;
 use crate::world::World;
 use crate::{server::Server, world::portal::PortalManager};
 use async_trait::async_trait;
@@ -8,7 +7,7 @@ use crossbeam::atomic::AtomicCell;
 use living::LivingEntity;
 use log::info;
 use player::Player;
-use pumpkin_data::fluid::{EnumVariants, FlowingWaterLikeFluidProperties, Fluid, FluidProperties};
+use pumpkin_data::fluid::{EnumVariants, FlowingWaterLikeFluidProperties, FluidProperties};
 use pumpkin_data::{
     block_properties::{Facing, HorizontalFacing},
     damage::DamageType,
@@ -32,10 +31,8 @@ use pumpkin_util::math::{
     vector3::Vector3,
     wrap_degrees,
 };
-use pumpkin_world::world::GetBlockError;
 use serde::Serialize;
 use std::sync::atomic::AtomicI16;
-use std::sync::atomic::Ordering::Release;
 use std::sync::{
     Arc,
     atomic::{
@@ -769,13 +766,13 @@ impl Entity {
         if swimming {
             let val = sprinting && touching_water;
             self.swimming.store(sprinting && touching_water, Relaxed);
-            if (!val) {
+            if !val {
                 self.set_pose(EntityPose::Standing).await;
             }
         } else {
             let val = sprinting && touching_water && submerged_in_water;
             self.swimming.store(val, Relaxed);
-            if (val) {
+            if val {
                 self.set_pose(EntityPose::Swimming).await;
             }
         }
